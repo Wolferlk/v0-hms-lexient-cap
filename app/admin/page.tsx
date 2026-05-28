@@ -14,6 +14,8 @@ import {
   Package,
   DollarSign,
   Heart,
+  UtensilsCrossed,
+  Anchor,
 } from 'lucide-react';
 import RoomManagement from '@/components/admin/RoomManagement';
 import BookingManagement from '@/components/admin/BookingManagement';
@@ -21,6 +23,9 @@ import BookingComIntegration from '@/components/admin/BookingComIntegration';
 import InventoryManagement from '@/components/admin/InventoryManagement';
 import FinancialManagement from '@/components/admin/FinancialManagement';
 import WeddingHallManagement from '@/components/admin/WeddingHallManagement';
+import RestaurantManagement from '@/components/admin/RestaurantManagement';
+import DayOutManagement from '@/components/admin/DayOutManagement';
+import StaffManagement from '@/components/admin/StaffManagement';
 import Dashboard from '@/components/admin/Dashboard';
 
 export default function AdminPage() {
@@ -34,7 +39,7 @@ export default function AdminPage() {
         <h1 className="mb-8 text-3xl font-bold">Admin Dashboard</h1>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-10 gap-1">
             <TabsTrigger value="dashboard" className="flex items-center gap-1">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline text-xs">Dashboard</span>
@@ -47,9 +52,21 @@ export default function AdminPage() {
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline text-xs">Bookings</span>
             </TabsTrigger>
+            <TabsTrigger value="restaurant" className="flex items-center gap-1">
+              <UtensilsCrossed className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Restaurant</span>
+            </TabsTrigger>
+            <TabsTrigger value="dayout" className="flex items-center gap-1">
+              <Anchor className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Day-out</span>
+            </TabsTrigger>
+            <TabsTrigger value="staff" className="flex items-center gap-1">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Staff</span>
+            </TabsTrigger>
             <TabsTrigger value="inventory" className="flex items-center gap-1">
               <Package className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Inventory</span>
+              <span className="hidden md:inline text-xs">Inventory</span>
             </TabsTrigger>
             <TabsTrigger value="finance" className="flex items-center gap-1">
               <DollarSign className="h-4 w-4" />
@@ -79,6 +96,18 @@ export default function AdminPage() {
 
           <TabsContent value="bookings" className="space-y-6">
             <BookingManagement />
+          </TabsContent>
+
+          <TabsContent value="restaurant" className="space-y-6">
+            <RestaurantManagement />
+          </TabsContent>
+
+          <TabsContent value="dayout" className="space-y-6">
+            <DayOutManagement />
+          </TabsContent>
+
+          <TabsContent value="staff" className="space-y-6">
+            <StaffManagement />
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-6">
