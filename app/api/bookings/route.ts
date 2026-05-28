@@ -16,20 +16,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const customerId = searchParams.get('customerId');
+    const upcoming = searchParams.get('upcoming');
+    const limit = parseInt(searchParams.get('limit') || '0');
 
     let query: any = {};
 
-    if (status) {
-      query.status = status;
+    if (status) query.status = status;
+    if (customerId) query.customerId = customerId;
+    if (upcoming === 'true') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      query.checkInDate = { $gte: today };
+      if (!status) query.status = { $in: ['pending', 'confirmed'] };
     }
 
-    if (customerId) {
-      query.customerId = customerId;
+    let bookingsQuery = Booking.find(query);
+    if (upcoming === 'true') {
+      bookingsQuery = bookingsQuery.sort({ checkInDate: 1 });
+    } else {
+      bookingsQuery = bookingsQuery.sort({ createdAt: -1 });
     }
+    if (limit > 0) bookingsQuery = bookingsQuery.limit(limit);
 
-    const bookings = await Booking.find(query)
-      .sort({ createdAt: -1 })
-      .lean();
+    const bookings = await bookingsQuery.lean();
 
     const fallbackBookings = sampleBookings.filter((booking) => {
       if (query.status && booking.status !== query.status) return false;

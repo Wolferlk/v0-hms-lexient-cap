@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
         if (query.status && order.status !== query.status) return false;
         if (query.customerId) {
           const resolvedCustomerId =
-            typeof order.customerId === 'object' ? order.customerId?._id : order.customerId;
+            typeof order.customerId === 'object'
+              ? (order.customerId as any)?._id
+              : order.customerId;
           if (resolvedCustomerId !== query.customerId) return false;
         }
         return true;

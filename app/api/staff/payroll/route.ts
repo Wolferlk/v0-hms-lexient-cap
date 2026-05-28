@@ -26,7 +26,9 @@ export async function GET(request: NextRequest) {
     }).filter((payroll) => {
       if (query.employeeId) {
         const resolvedEmployeeId =
-          typeof payroll.employeeId === 'object' ? payroll.employeeId?._id : payroll.employeeId;
+          typeof payroll.employeeId === 'object'
+            ? (payroll.employeeId as any)?._id
+            : payroll.employeeId;
         if (resolvedEmployeeId !== query.employeeId) return false;
       }
       if (query.month && payroll.month !== query.month) return false;

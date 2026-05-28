@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Booking } from '@/lib/models/Booking';
 import { Order, MenuItem } from '@/lib/models/Restaurant';
+import { Room } from '@/lib/models/Room';
 import { ObjectId } from 'mongodb';
 
 export async function GET(
@@ -69,6 +70,14 @@ export async function POST(
     const menuItemIds = items.map((i: { menuItemId: string }) => i.menuItemId);
     const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } }).lean() as Array<{ _id: string; name: string; price: number }>;
 
+    const room = booking.roomIds?.[0]
+      ? await Room.findById(booking.roomIds[0]).lean() as { roomNumber?: string } | null
+      : null;
+
+    const safeCustomerId = ObjectId.isValid(booking.customerId)
+      ? new ObjectId(booking.customerId)
+      : undefined;
+
     const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m]));
 
     const resolvedItems = items.map((item: { menuItemId: string; quantity: number; specialInstructions?: string }) => {
@@ -92,10 +101,10 @@ export async function POST(
 
     const order = new Order({
       bookingId: id,
-      customerId: booking.customerId,
+      ...(safeCustomerId ? { customerId: safeCustomerId } : {}),
       orderType: 'room-service',
       mealType: mealType || 'lunch',
-      roomNumber: booking.roomIds?.[0] || '',
+      roomNumber: room?.roomNumber || '',
       items: resolvedItems,
       subtotal,
       tax,
@@ -104,12 +113,13 @@ export async function POST(
       paymentStatus: 'charged_to_room',
       paymentMethod: 'room_charge',
       status: 'pending',
-      notes: notes || '',
     });
 
     await order.save();
 
-    return NextResponse.json({ success: true, data: order }, { status: 201 });
+    const savedOrder = await Order.findById(order._id).lean();
+
+    return NextResponse.json({ success: true, data: savedOrder }, { status: 201 });
   } catch (error: unknown) {
     console.error('[v0] Error placing room service order:', error);
     const message = error instanceof Error ? error.message : 'Failed to place room service order';

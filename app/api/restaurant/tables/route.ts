@@ -44,6 +44,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const tableCount = await Table.countDocuments();
+    if (tableCount >= 50) {
+      return NextResponse.json(
+        { success: false, error: 'Restaurant table limit reached (50)' },
+        { status: 400 }
+      );
+    }
+
     // Check if table already exists
     const existing = await Table.findOne({ tableNumber });
     if (existing) {

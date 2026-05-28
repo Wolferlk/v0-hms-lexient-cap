@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
       if (query.status && reservation.status !== query.status) return false;
       if (query.customerId) {
         const resolvedCustomerId =
-          typeof reservation.customerId === 'object' ? reservation.customerId?._id : reservation.customerId;
+          typeof reservation.customerId === 'object'
+            ? (reservation.customerId as any)?._id
+            : reservation.customerId;
         if (resolvedCustomerId !== query.customerId) return false;
       }
       if (query.reservationDate) {

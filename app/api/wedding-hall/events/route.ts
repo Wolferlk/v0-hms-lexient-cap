@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     }).filter((event) => {
       if (query.status && event.status !== query.status) return false;
       if (query.hallId) {
-        const resolvedHallId = typeof event.hallId === 'object' ? event.hallId?._id : event.hallId;
+        const resolvedHallId =
+          typeof event.hallId === 'object' ? (event.hallId as any)?._id : event.hallId;
         if (resolvedHallId !== query.hallId) return false;
       }
       return true;

@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
     }).filter((record) => {
       if (query.employeeId) {
         const resolvedEmployeeId =
-          typeof record.employeeId === 'object' ? record.employeeId?._id : record.employeeId;
+          typeof record.employeeId === 'object'
+            ? (record.employeeId as any)?._id
+            : record.employeeId;
         if (resolvedEmployeeId !== query.employeeId) return false;
       }
       if (query.attendanceDate) {

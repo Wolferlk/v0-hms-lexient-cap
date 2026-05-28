@@ -30,7 +30,13 @@ const TableSchema = new mongoose.Schema({
     enum: ['available', 'reserved', 'occupied', 'maintenance'],
     default: 'available',
   },
-  amenities: [String], // e.g., 'window_view', 'private_corner'
+  amenities: [String],
+  // Session fields (set when table is opened for service)
+  partyName: { type: String, default: '' },
+  partySize: { type: Number, default: 0 },
+  openedAt: { type: Date },
+  currentOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+  currentBillId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bill' },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -55,7 +61,9 @@ const ReservationSchema = new mongoose.Schema({
 const OrderSchema = new mongoose.Schema({
   reservationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Reservation' },
   bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', index: true },
+  tableId: { type: mongoose.Schema.Types.ObjectId, ref: 'Table', index: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  partyName: { type: String, default: '' },
   orderType: {
     type: String,
     enum: ['dine-in', 'room-service'],
@@ -91,7 +99,7 @@ const OrderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'approved', 'preparing', 'ready', 'delivered', 'completed', 'cancelled'],
+    enum: ['pending', 'approved', 'preparing', 'ready', 'served', 'delivered', 'completed', 'cancelled'],
     default: 'pending',
   },
   orderTime: { type: Date, default: Date.now },
@@ -102,7 +110,10 @@ const OrderSchema = new mongoose.Schema({
 
 const BillSchema = new mongoose.Schema({
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
-  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  tableId: { type: mongoose.Schema.Types.ObjectId, ref: 'Table', index: true },
+  tableNumber: { type: String, index: true },
+  partyName: { type: String, default: '' },
   items: [
     {
       itemName: String,
@@ -128,6 +139,7 @@ const BillSchema = new mongoose.Schema({
     },
   ],
   billNumber: { type: String, unique: true, index: true },
+  qrCodeValue: { type: String, index: true },
   billDate: { type: Date, default: Date.now },
   notes: String,
   createdAt: { type: Date, default: Date.now },

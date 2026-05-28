@@ -8,6 +8,13 @@ export interface IPaymentRecord {
   recordedBy?: string;
 }
 
+export interface IAdditionalCharge {
+  description: string;
+  qty: number;
+  unitAmount: number;
+  total: number;
+}
+
 export interface IGuestDocument {
   docType: 'id_card' | 'passport' | 'driving_license' | 'other';
   docNumber: string;
@@ -32,6 +39,7 @@ export interface IBooking extends Document {
   discountAmount?: number;
   amountPaid: number;
   payments: IPaymentRecord[];
+  additionalCharges: IAdditionalCharge[];
   guestDocument?: IGuestDocument;
   status: 'pending' | 'confirmed' | 'checked-in' | 'checked-out' | 'cancelled';
   paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded';
@@ -56,6 +64,16 @@ const PaymentRecordSchema = new Schema<IPaymentRecord>(
     date: { type: Date, default: Date.now },
     notes: { type: String, default: '' },
     recordedBy: { type: String, default: '' },
+  },
+  { _id: true }
+);
+
+const AdditionalChargeSchema = new Schema<IAdditionalCharge>(
+  {
+    description: { type: String, required: true },
+    qty: { type: Number, default: 1, min: 1 },
+    unitAmount: { type: Number, required: true, min: 0 },
+    total: { type: Number, required: true, min: 0 },
   },
   { _id: true }
 );
@@ -97,6 +115,7 @@ const bookingSchema = new Schema<IBooking>(
     discountAmount: { type: Number, default: 0 },
     amountPaid: { type: Number, default: 0 },
     payments: { type: [PaymentRecordSchema], default: [] },
+    additionalCharges: { type: [AdditionalChargeSchema], default: [] },
     guestDocument: { type: GuestDocumentSchema },
     status: {
       type: String,

@@ -1,23 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Navigation } from '@/components/Navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  BarChart3,
-  Home,
-  Calendar,
-  Users,
-  Zap,
-  Package,
-  DollarSign,
-  Heart,
-  UtensilsCrossed,
-  Anchor,
-  LineChart,
-} from 'lucide-react';
 import RoomManagement from '@/components/admin/RoomManagement';
 import BookingManagement from '@/components/admin/BookingManagement';
 import BookingComIntegration from '@/components/admin/BookingComIntegration';
@@ -29,109 +13,119 @@ import DayOutManagement from '@/components/admin/DayOutManagement';
 import StaffManagement from '@/components/admin/StaffManagement';
 import AnalyticsReporting from '@/components/admin/AnalyticsReporting';
 import Dashboard from '@/components/admin/Dashboard';
+import {
+  BarChart3, Home, Calendar, Users, Zap, Package,
+  DollarSign, Heart, UtensilsCrossed, Anchor, LineChart,
+  Menu, X,
+} from 'lucide-react';
+
+const NAV_ITEMS = [
+  { id: 'dashboard',  label: 'Dashboard',    icon: BarChart3 },
+  { id: 'bookings',   label: 'Bookings',      icon: Calendar },
+  { id: 'rooms',      label: 'Rooms',         icon: Home },
+  { id: 'restaurant', label: 'Restaurant',    icon: UtensilsCrossed },
+  { id: 'wedding',    label: 'Wedding',       icon: Heart },
+  { id: 'dayout',     label: 'Day-out',       icon: Anchor },
+  { id: 'staff',      label: 'Staff',         icon: Users },
+  { id: 'inventory',  label: 'Inventory',     icon: Package },
+  { id: 'finance',    label: 'Finance',       icon: DollarSign },
+  { id: 'analytics',  label: 'Analytics',     icon: LineChart },
+  { id: 'bookingcom', label: 'Booking.com',   icon: Zap },
+];
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const current = NAV_ITEMS.find(n => n.id === activeTab);
+
+  const navigate = (id: string) => {
+    setActiveTab(id);
+    setSidebarOpen(false);
+  };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navigation />
 
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="mb-8 text-3xl font-bold">Admin Dashboard</h1>
+      <div className="flex flex-1 overflow-hidden">
+        {/* ── Sidebar ─────────────────────────────────────────────── */}
+        <>
+          {/* Mobile overlay */}
+          {sidebarOpen && (
+            <div
+              className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-10 gap-1">
-            <TabsTrigger value="dashboard" className="flex items-center gap-1">
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Dashboard</span>
-            </TabsTrigger>
-            <TabsTrigger value="rooms" className="flex items-center gap-1">
-              <Home className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Rooms</span>
-            </TabsTrigger>
-            <TabsTrigger value="bookings" className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Bookings</span>
-            </TabsTrigger>
-            <TabsTrigger value="restaurant" className="flex items-center gap-1">
-              <UtensilsCrossed className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Restaurant</span>
-            </TabsTrigger>
-            <TabsTrigger value="dayout" className="flex items-center gap-1">
-              <Anchor className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Day-out</span>
-            </TabsTrigger>
-            <TabsTrigger value="staff" className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Staff</span>
-            </TabsTrigger>
-            <TabsTrigger value="inventory" className="flex items-center gap-1">
-              <Package className="h-4 w-4" />
-              <span className="hidden md:inline text-xs">Inventory</span>
-            </TabsTrigger>
-            <TabsTrigger value="finance" className="flex items-center gap-1">
-              <DollarSign className="h-4 w-4" />
-              <span className="hidden md:inline text-xs">Finance</span>
-            </TabsTrigger>
-            <TabsTrigger value="wedding" className="flex items-center gap-1">
-              <Heart className="h-4 w-4" />
-              <span className="hidden md:inline text-xs">Wedding</span>
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-1">
-              <LineChart className="h-4 w-4" />
-              <span className="hidden lg:inline text-xs">Analytics</span>
-            </TabsTrigger>
-            <TabsTrigger value="bookingcom" className="flex items-center gap-1">
-              <Zap className="h-4 w-4" />
-              <span className="hidden lg:inline text-xs">Booking.com</span>
-            </TabsTrigger>
-          </TabsList>
+          <aside className={`
+            fixed top-0 left-0 z-40 h-full w-56 bg-card border-r border-border pt-16 flex flex-col
+            transition-transform duration-200
+            lg:static lg:translate-x-0 lg:z-auto lg:pt-0 lg:h-auto
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          `}>
+            <div className="p-3 border-b border-border hidden lg:block">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3">Admin Panel</p>
+            </div>
+            <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+              {NAV_ITEMS.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => navigate(item.id)}
+                  className={`
+                    w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium
+                    transition-colors text-left
+                    ${activeTab === item.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }
+                  `}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+        </>
 
-          <TabsContent value="dashboard" className="space-y-6">
-            <Dashboard />
-          </TabsContent>
+        {/* ── Main content ─────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto">
+          {/* Mobile header bar */}
+          <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="rounded-lg p-1.5 hover:bg-muted"
+            >
+              {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+            <h1 className="font-semibold">
+              {current?.icon && <current.icon className="inline-block h-4 w-4 mr-1.5" />}
+              {current?.label}
+            </h1>
+          </div>
 
-          <TabsContent value="rooms" className="space-y-6">
-            <RoomManagement />
-          </TabsContent>
+          <div className="p-4 lg:p-6 space-y-4">
+            {/* Page title — desktop */}
+            <div className="hidden lg:flex items-center gap-3 mb-6">
+              {current?.icon && <current.icon className="h-6 w-6 text-muted-foreground" />}
+              <h1 className="text-2xl font-bold">{current?.label}</h1>
+            </div>
 
-          <TabsContent value="bookings" className="space-y-6">
-            <BookingManagement />
-          </TabsContent>
-
-          <TabsContent value="restaurant" className="space-y-6">
-            <RestaurantManagement />
-          </TabsContent>
-
-          <TabsContent value="dayout" className="space-y-6">
-            <DayOutManagement />
-          </TabsContent>
-
-          <TabsContent value="staff" className="space-y-6">
-            <StaffManagement />
-          </TabsContent>
-
-          <TabsContent value="inventory" className="space-y-6">
-            <InventoryManagement />
-          </TabsContent>
-
-          <TabsContent value="finance" className="space-y-6">
-            <FinancialManagement />
-          </TabsContent>
-
-          <TabsContent value="wedding" className="space-y-6">
-            <WeddingHallManagement />
-          </TabsContent>
-
-          <TabsContent value="analytics" className="space-y-6">
-            <AnalyticsReporting />
-          </TabsContent>
-
-          <TabsContent value="bookingcom" className="space-y-6">
-            <BookingComIntegration />
-          </TabsContent>
-        </Tabs>
+            {activeTab === 'dashboard'  && <Dashboard onNavigate={navigate} />}
+            {activeTab === 'rooms'      && <RoomManagement />}
+            {activeTab === 'bookings'   && <BookingManagement />}
+            {activeTab === 'restaurant' && <RestaurantManagement />}
+            {activeTab === 'dayout'     && <DayOutManagement />}
+            {activeTab === 'staff'      && <StaffManagement />}
+            {activeTab === 'inventory'  && <InventoryManagement />}
+            {activeTab === 'finance'    && <FinancialManagement />}
+            {activeTab === 'wedding'    && <WeddingHallManagement />}
+            {activeTab === 'analytics'  && <AnalyticsReporting />}
+            {activeTab === 'bookingcom' && <BookingComIntegration />}
+          </div>
+        </main>
       </div>
     </div>
   );

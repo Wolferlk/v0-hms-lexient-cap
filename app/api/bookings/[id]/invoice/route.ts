@@ -6,47 +6,43 @@ import { Room } from '@/lib/models/Room';
 import { ObjectId } from 'mongodb';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     const { id } = await params;
 
-    if (!ObjectId.isValid(id)) {
+    if (!ObjectId.isValid(id))
       return NextResponse.json({ success: false, error: 'Invalid booking ID' }, { status: 400 });
-    }
 
-    const booking = await Booking.findById(id).lean() as (typeof Booking extends { new(): infer T } ? T : never) | null;
-
-    if (!booking) {
+    const booking = await Booking.findById(id).lean() as any;
+    if (!booking)
       return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 });
-    }
 
-    const b = booking as any;
+    // Room details
+    const rooms = await Room.find({ _id: { $in: booking.roomIds } }).lean() as any[];
 
-    // Fetch room details
-    const rooms = await Room.find({ _id: { $in: b.roomIds } }).lean() as any[];
-
-    // Fetch all room service orders for this booking
+    // Room service orders
     const roomServiceOrders = await Order.find({
       bookingId: id,
       orderType: 'room-service',
+      status: { $ne: 'cancelled' },
     }).lean() as any[];
 
-    // Build room charges line items
+    // Build room charge line items
     const roomCharges = rooms.map((room: any) => ({
-      description: `Room ${room.roomNumber} (${room.category}) × ${b.numberOfNights} night(s)`,
+      description: `Room ${room.roomNumber} (${room.category}) × ${booking.numberOfNights} night(s)`,
       unitPrice: room.pricePerNight,
-      quantity: b.numberOfNights,
-      total: room.pricePerNight * b.numberOfNights,
+      quantity: booking.numberOfNights,
+      total: room.pricePerNight * booking.numberOfNights,
     }));
 
-    const roomSubtotal = roomCharges.reduce((sum: number, r: any) => sum + r.total, 0);
-    const discount = b.discountAmount || 0;
+    const roomSubtotal = roomCharges.reduce((s: number, r: any) => s + r.total, 0);
+    const discount = booking.discountAmount || 0;
     const roomTotal = roomSubtotal - discount;
 
-    // Build food order line items
+    // Build food line items
     const foodLineItems: any[] = [];
     let foodSubtotal = 0;
     let foodTax = 0;
@@ -54,7 +50,7 @@ export async function GET(
     for (const order of roomServiceOrders) {
       for (const item of order.items) {
         foodLineItems.push({
-          description: `${item.itemName || 'Item'} (${order.mealType})`,
+          description: `${item.itemName || 'Item'} (${order.mealType} · ${new Date(order.orderTime || order.createdAt).toLocaleString()})`,
           unitPrice: item.price,
           quantity: item.quantity,
           total: item.price * item.quantity,
@@ -62,32 +58,43 @@ export async function GET(
           orderStatus: order.status,
         });
       }
-      foodSubtotal += order.subtotal;
+      foodSubtotal += order.subtotal || 0;
       foodTax += order.tax || 0;
     }
-
     const foodTotal = foodSubtotal + foodTax;
-    const grandTotal = roomTotal + foodTotal;
-    const amountPaid = b.amountPaid || 0;
+
+    // Additional charges (manually added)
+    const additionalCharges = (booking.additionalCharges || []).map((c: any) => ({
+      description: c.description,
+      qty: c.qty,
+      unitAmount: c.unitAmount,
+      total: c.total,
+      id: c._id?.toString(),
+    }));
+    const additionalTotal = additionalCharges.reduce((s: number, c: any) => s + c.total, 0);
+
+    const grandTotal = roomTotal + foodTotal + additionalTotal;
+    const amountPaid = booking.amountPaid || 0;
     const balanceDue = Math.max(0, grandTotal - amountPaid);
 
     const invoice = {
-      invoiceNumber: `INV-${b.bookingId}`,
+      invoiceNumber: `INV-${booking.bookingId}`,
       generatedAt: new Date().toISOString(),
       booking: {
-        bookingId: b.bookingId,
-        customerName: b.customerName,
-        customerEmail: b.customerEmail,
-        customerPhone: b.customerPhone,
-        checkInDate: b.checkInDate,
-        checkOutDate: b.checkOutDate,
-        checkInTime: b.checkInTime,
-        checkOutTime: b.checkOutTime,
-        numberOfNights: b.numberOfNights,
-        numberOfGuests: b.numberOfGuests,
-        status: b.status,
-        paymentStatus: b.paymentStatus,
-        guestDocument: b.guestDocument,
+        bookingId: booking.bookingId,
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail,
+        customerPhone: booking.customerPhone,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        checkInTime: booking.checkInTime,
+        checkOutTime: booking.checkOutTime,
+        numberOfNights: booking.numberOfNights,
+        numberOfGuests: booking.numberOfGuests,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        guestDocument: booking.guestDocument,
+        roomIds: booking.roomIds,
       },
       roomCharges: {
         items: roomCharges,
@@ -101,19 +108,24 @@ export async function GET(
         tax: foodTax,
         total: foodTotal,
       },
+      additionalCharges: {
+        items: additionalCharges,
+        total: additionalTotal,
+      },
       summary: {
         roomTotal,
         foodTotal,
+        additionalTotal,
         grandTotal,
         amountPaid,
         balanceDue,
       },
-      payments: b.payments || [],
+      payments: booking.payments || [],
     };
 
     return NextResponse.json({ success: true, data: invoice }, { status: 200 });
   } catch (error) {
-    console.error('[v0] Error generating invoice:', error);
+    console.error('[v0] Invoice error:', error);
     return NextResponse.json({ success: false, error: 'Failed to generate invoice' }, { status: 500 });
   }
 }

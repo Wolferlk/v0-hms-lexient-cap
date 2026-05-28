@@ -47,15 +47,20 @@ export async function POST(
       );
     }
 
-    // Compute grand total from room service orders
+    // Compute grand total from room service orders + manual additional charges
     const roomServiceOrders = await Order.find({
       bookingId: id,
       orderType: 'room-service',
+      status: { $ne: 'cancelled' },
     }).lean() as any[];
 
     const foodTotal = roomServiceOrders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
     const roomTotal = (booking.totalAmount || 0) - (booking.discountAmount || 0);
-    const grandTotal = roomTotal + foodTotal;
+    const additionalTotal = (booking.additionalCharges || []).reduce(
+      (sum: number, charge: any) => sum + (charge.total || 0),
+      0
+    );
+    const grandTotal = roomTotal + foodTotal + additionalTotal;
 
     const previouslyPaid = booking.amountPaid || 0;
     const newAmountPaid = previouslyPaid + paymentAmount;
@@ -113,6 +118,9 @@ export async function POST(
         checkedOut: balanceDue <= 0,
         balanceDue: Math.max(0, balanceDue),
         grandTotal,
+        additionalTotal,
+        foodTotal,
+        roomTotal,
         amountPaid: newAmountPaid,
       },
       { status: 200 }
