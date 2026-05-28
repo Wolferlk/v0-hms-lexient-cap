@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { connectDB } from './mongodb';
 import { ChatConversation, ChatFeedback } from './models/ChatBot';
-import Room from './models/Room';
+import { Room } from './models/Room';
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';

@@ -1,6 +1,12 @@
 import { connectDB } from '@/lib/mongodb';
 import { BoatRideBooking, BoatRidePackage } from '@/lib/models/DayOut';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  sampleBoatRideBookings,
+  sampleBoatRidePackages,
+  sampleCustomers,
+  withPopulatedRelations,
+} from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +23,15 @@ export async function GET(request: NextRequest) {
       .populate('customerId', 'name email phone')
       .sort({ bookingDate: -1 });
 
-    return NextResponse.json({ success: true, data: bookings });
+    const fallbackBookings = withPopulatedRelations(sampleBoatRideBookings, {
+      packageId: sampleBoatRidePackages,
+      customerId: sampleCustomers,
+    }).filter((booking) => {
+      if (query.status && booking.status !== query.status) return false;
+      return true;
+    });
+
+    return NextResponse.json({ success: true, data: bookings.length ? bookings : fallbackBookings });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

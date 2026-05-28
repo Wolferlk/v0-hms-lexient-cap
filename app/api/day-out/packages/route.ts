@@ -1,13 +1,14 @@
 import { connectDB } from '@/lib/mongodb';
 import { DayOutPackage } from '@/lib/models/DayOut';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleDayOutPackages } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
     const packages = await DayOutPackage.find().sort({ createdAt: -1 });
-    return NextResponse.json({ success: true, data: packages });
+    return NextResponse.json({ success: true, data: packages.length ? packages : sampleDayOutPackages });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

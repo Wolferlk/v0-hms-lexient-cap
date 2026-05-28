@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { InventoryItem, Supplier } from '@/lib/models/Inventory';
+import { sampleInventoryItems, sampleSuppliers, withPopulatedRelations } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,15 +23,21 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     const total = await InventoryItem.countDocuments(query);
+    const fallbackItems = withPopulatedRelations(sampleInventoryItems, {
+      supplier: sampleSuppliers,
+    }).filter((item) => {
+      if (query.category && item.category !== query.category) return false;
+      return true;
+    });
 
     return NextResponse.json({
       success: true,
-      data: items,
+      data: items.length ? items : fallbackItems,
       pagination: {
-        total,
+        total: items.length ? total : fallbackItems.length,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil((items.length ? total : fallbackItems.length) / limit),
       },
     });
   } catch (error: any) {

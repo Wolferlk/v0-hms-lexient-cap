@@ -1,6 +1,12 @@
 import { connectDB } from '@/lib/mongodb';
 import { Order, MenuItem } from '@/lib/models/Restaurant';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  sampleCustomers,
+  sampleMenuItems,
+  sampleRestaurantOrders,
+  withPopulatedRelations,
+} from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +24,27 @@ export async function GET(request: NextRequest) {
       .populate('customerId', 'name email phone')
       .sort({ orderTime: -1 });
 
-    return NextResponse.json({ success: true, data: orders });
+    const fallbackOrders = withPopulatedRelations(sampleRestaurantOrders, {
+      customerId: sampleCustomers,
+    })
+      .filter((order) => {
+        if (query.status && order.status !== query.status) return false;
+        if (query.customerId) {
+          const resolvedCustomerId =
+            typeof order.customerId === 'object' ? order.customerId?._id : order.customerId;
+          if (resolvedCustomerId !== query.customerId) return false;
+        }
+        return true;
+      })
+      .map((order) => ({
+        ...order,
+        items: order.items.map((item: any) => ({
+          ...item,
+          menuItemId: sampleMenuItems.find((menuItem) => menuItem._id === item.menuItemId) ?? item.menuItemId,
+        })),
+      }));
+
+    return NextResponse.json({ success: true, data: orders.length ? orders : fallbackOrders });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

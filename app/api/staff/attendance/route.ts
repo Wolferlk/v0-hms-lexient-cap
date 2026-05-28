@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb';
 import { Attendance } from '@/lib/models/Staff';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleAttendance, sampleEmployees, withPopulatedRelations } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +25,24 @@ export async function GET(request: NextRequest) {
       .populate('employeeId', 'name email')
       .sort({ attendanceDate: -1 });
 
-    return NextResponse.json({ success: true, data: attendance });
+    const fallbackAttendance = withPopulatedRelations(sampleAttendance, {
+      employeeId: sampleEmployees,
+    }).filter((record) => {
+      if (query.employeeId) {
+        const resolvedEmployeeId =
+          typeof record.employeeId === 'object' ? record.employeeId?._id : record.employeeId;
+        if (resolvedEmployeeId !== query.employeeId) return false;
+      }
+      if (query.attendanceDate) {
+        const attendanceDate = new Date(record.attendanceDate);
+        if (attendanceDate < query.attendanceDate.$gte || attendanceDate >= query.attendanceDate.$lt) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return NextResponse.json({ success: true, data: attendance.length ? attendance : fallbackAttendance });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

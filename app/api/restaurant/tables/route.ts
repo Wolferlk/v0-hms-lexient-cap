@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb';
 import { Table } from '@/lib/models/Restaurant';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleRestaurantTables } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,12 @@ export async function GET(request: NextRequest) {
     if (capacity) query.capacity = { $gte: parseInt(capacity) };
 
     const tables = await Table.find(query).sort({ tableNumber: 1 });
-    return NextResponse.json({ success: true, data: tables });
+    const fallbackTables = sampleRestaurantTables.filter((table) => {
+      if (query.status && table.status !== query.status) return false;
+      if (query.capacity?.$gte && table.capacity < query.capacity.$gte) return false;
+      return true;
+    });
+    return NextResponse.json({ success: true, data: tables.length ? tables : fallbackTables });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

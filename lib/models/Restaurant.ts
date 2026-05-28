@@ -54,10 +54,23 @@ const ReservationSchema = new mongoose.Schema({
 
 const OrderSchema = new mongoose.Schema({
   reservationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Reservation' },
-  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', index: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  orderType: {
+    type: String,
+    enum: ['dine-in', 'room-service'],
+    default: 'dine-in',
+  },
+  mealType: {
+    type: String,
+    enum: ['breakfast', 'lunch', 'dinner', 'snack', 'beverages'],
+    default: 'lunch',
+  },
+  roomNumber: { type: String, default: '' },
   items: [
     {
       menuItemId: { type: mongoose.Schema.Types.ObjectId, required: true },
+      itemName: { type: String, default: '' },
       quantity: { type: Number, required: true },
       specialInstructions: String,
       price: Number,
@@ -69,16 +82,16 @@ const OrderSchema = new mongoose.Schema({
   total: { type: Number, required: true },
   paymentStatus: {
     type: String,
-    enum: ['unpaid', 'partial', 'paid'],
+    enum: ['unpaid', 'partial', 'paid', 'charged_to_room'],
     default: 'unpaid',
   },
   paymentMethod: {
     type: String,
-    enum: ['cash', 'card', 'upi', 'wallet'],
+    enum: ['cash', 'card', 'upi', 'wallet', 'room_charge'],
   },
   status: {
     type: String,
-    enum: ['pending', 'preparing', 'ready', 'served', 'completed', 'cancelled'],
+    enum: ['pending', 'approved', 'preparing', 'ready', 'delivered', 'completed', 'cancelled'],
     default: 'pending',
   },
   orderTime: { type: Date, default: Date.now },

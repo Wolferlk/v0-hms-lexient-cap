@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Room } from '@/lib/models/Room';
+import { sampleRooms } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,11 +24,16 @@ export async function GET(request: NextRequest) {
     }
 
     const rooms = await Room.find(query).lean();
+    const fallbackRooms = sampleRooms.filter((room) => {
+      if (query.category && room.category !== query.category) return false;
+      if (query.isAvailable !== undefined && room.isAvailable !== query.isAvailable) return false;
+      return true;
+    });
 
     return NextResponse.json(
       {
         success: true,
-        data: rooms,
+        data: rooms.length ? rooms : fallbackRooms,
       },
       { status: 200 }
     );

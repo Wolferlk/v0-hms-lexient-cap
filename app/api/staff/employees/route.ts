@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb';
 import { Employee } from '@/lib/models/Staff';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleEmployees } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,12 @@ export async function GET(request: NextRequest) {
     if (status) query.status = status;
 
     const employees = await Employee.find(query).sort({ name: 1 });
-    return NextResponse.json({ success: true, data: employees });
+    const fallbackEmployees = sampleEmployees.filter((employee) => {
+      if (query.department && employee.department !== query.department) return false;
+      if (query.status && employee.status !== query.status) return false;
+      return true;
+    });
+    return NextResponse.json({ success: true, data: employees.length ? employees : fallbackEmployees });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

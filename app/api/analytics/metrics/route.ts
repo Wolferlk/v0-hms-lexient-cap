@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { AnalyticsMetrics } from '@/lib/models/Analytics';
 import { AnalyticsService } from '@/lib/analyticsService';
+import { sampleAnalyticsMetrics } from '@/lib/sampleData';
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,9 +21,13 @@ export async function GET(req: NextRequest) {
     }
 
     const metrics = await AnalyticsMetrics.find(query).sort({ date: -1 });
+    const fallbackMetrics = sampleAnalyticsMetrics.filter((metric) => {
+      if (metricType && metric.metric !== metricType) return false;
+      return new Date(metric.date) >= startDate;
+    });
 
     return NextResponse.json({
-      metrics,
+      metrics: metrics.length ? metrics : fallbackMetrics,
       period: {
         start: startDate,
         end: new Date(),

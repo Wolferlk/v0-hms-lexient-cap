@@ -1,6 +1,12 @@
 import { connectDB } from '@/lib/mongodb';
 import { Reservation, Table } from '@/lib/models/Restaurant';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  sampleCustomers,
+  sampleRestaurantReservations,
+  sampleRestaurantTables,
+  withPopulatedRelations,
+} from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +32,26 @@ export async function GET(request: NextRequest) {
       .populate('tableId', 'tableNumber capacity')
       .sort({ reservationDate: -1 });
 
-    return NextResponse.json({ success: true, data: reservations });
+    const fallbackReservations = withPopulatedRelations(sampleRestaurantReservations, {
+      customerId: sampleCustomers,
+      tableId: sampleRestaurantTables,
+    }).filter((reservation) => {
+      if (query.status && reservation.status !== query.status) return false;
+      if (query.customerId) {
+        const resolvedCustomerId =
+          typeof reservation.customerId === 'object' ? reservation.customerId?._id : reservation.customerId;
+        if (resolvedCustomerId !== query.customerId) return false;
+      }
+      if (query.reservationDate) {
+        const reservationDate = new Date(reservation.reservationDate);
+        if (reservationDate < query.reservationDate.$gte || reservationDate >= query.reservationDate.$lt) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return NextResponse.json({ success: true, data: reservations.length ? reservations : fallbackReservations });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

@@ -1,7 +1,7 @@
 import { connectDB } from './mongodb';
 import { AnalyticsMetrics, Report } from './models/Analytics';
-import Booking from './models/Booking';
-import Room from './models/Room';
+import { Booking } from './models/Booking';
+import { Room } from './models/Room';
 import { Expense, Income } from './models/Finance';
 
 export class AnalyticsService {
@@ -24,7 +24,7 @@ export class AnalyticsService {
         createdAt: { $gte: startOfDay, $lte: endOfDay },
         paymentStatus: 'paid',
       });
-      const totalRevenue = bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+      const totalRevenue = bookings.reduce((sum, b) => sum + ((b as any).totalAmount || 0), 0);
 
       // Occupancy Rate
       const totalRooms = await Room.countDocuments();
@@ -119,11 +119,11 @@ export class AnalyticsService {
     });
 
     return {
-      totalRevenue: bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0),
+      totalRevenue: bookings.reduce((sum, b) => sum + ((b as any).totalAmount || 0), 0),
       bookingCount: bookings.length,
       averageBookingValue:
         bookings.length > 0
-          ? bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0) / bookings.length
+          ? bookings.reduce((sum, b) => sum + ((b as any).totalAmount || 0), 0) / bookings.length
           : 0,
       byRoom: this.groupByRoom(bookings),
       byPaymentMethod: this.groupByPaymentMethod(bookings),
@@ -138,7 +138,7 @@ export class AnalyticsService {
     });
 
     const totalRoomNights = rooms.length * Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const occupiedRoomNights = bookings.reduce((sum, b) => {
+    const occupiedRoomNights = bookings.reduce((sum: number, b) => {
       const nights = Math.ceil((b.checkOutDate.getTime() - b.checkInDate.getTime()) / (1000 * 60 * 60 * 24));
       return sum + nights;
     }, 0);
@@ -158,11 +158,11 @@ export class AnalyticsService {
 
     return {
       totalCustomers: bookings.length,
-      newCustomers: bookings.filter(b => !b.customerId?.previousBookings).length,
-      repeatCustomers: bookings.filter(b => b.customerId?.previousBookings).length,
+      newCustomers: bookings.filter((b) => !(b as any).customerId?.previousBookings).length,
+      repeatCustomers: bookings.filter((b) => (b as any).customerId?.previousBookings).length,
       averageCustomerValue:
         bookings.length > 0
-          ? bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0) / bookings.length
+          ? bookings.reduce((sum, b) => sum + ((b as any).totalAmount || 0), 0) / bookings.length
           : 0,
     };
   }
@@ -253,11 +253,11 @@ export class AnalyticsService {
     });
 
     return {
-      totalRevenue: bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0),
+      totalRevenue: bookings.reduce((sum: number, b) => sum + ((b as any).totalAmount || 0), 0),
       totalBookings: bookings.length,
       averageBookingValue:
         bookings.length > 0
-          ? bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0) / bookings.length
+          ? bookings.reduce((sum: number, b) => sum + ((b as any).totalAmount || 0), 0) / bookings.length
           : 0,
     };
   }
@@ -270,7 +270,7 @@ export class AnalyticsService {
     });
 
     const totalRoomNights = rooms.length * Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const occupiedRoomNights = bookings.reduce((sum, b) => {
+    const occupiedRoomNights = bookings.reduce((sum: number, b) => {
       const nights = Math.ceil((b.checkOutDate.getTime() - b.checkInDate.getTime()) / (1000 * 60 * 60 * 24));
       return sum + nights;
     }, 0);

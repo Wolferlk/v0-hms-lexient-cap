@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import { Report } from '@/lib/models/Analytics';
 import { AnalyticsService } from '@/lib/analyticsService';
 import { verifyToken } from '@/lib/auth';
+import { sampleReports } from '@/lib/sampleData';
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,10 +19,16 @@ export async function GET(req: NextRequest) {
     }
 
     const reports = await Report.find(query).sort({ createdAt: -1 }).limit(limit);
+    const fallbackReports = sampleReports
+      .filter((report) => {
+        if (reportType && report.type !== reportType) return false;
+        return true;
+      })
+      .slice(0, limit);
 
     return NextResponse.json({
-      reports,
-      count: reports.length,
+      reports: reports.length ? reports : fallbackReports,
+      count: reports.length ? reports.length : fallbackReports.length,
     });
   } catch (error) {
     console.error('[v0] Reports fetch error:', error);

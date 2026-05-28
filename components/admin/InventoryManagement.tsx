@@ -27,6 +27,7 @@ interface InventoryItem {
   quantity: number;
   unit: string;
   minimumLevel: number;
+  maximumLevel: number;
   unitCost: number;
   supplier: { _id: string; name: string };
   location: string;

@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb';
 import { MenuItem } from '@/lib/models/Restaurant';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleMenuItems } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,12 @@ export async function GET(request: NextRequest) {
     if (available !== null) query.available = available === 'true';
 
     const items = await MenuItem.find(query).sort({ category: 1, name: 1 });
-    return NextResponse.json({ success: true, data: items });
+    const fallbackItems = sampleMenuItems.filter((item) => {
+      if (query.category && item.category !== query.category) return false;
+      if (query.available !== undefined && item.available !== query.available) return false;
+      return true;
+    });
+    return NextResponse.json({ success: true, data: items.length ? items : fallbackItems });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Supplier } from '@/lib/models/Inventory';
+import { sampleSuppliers } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,15 +22,19 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     const total = await Supplier.countDocuments(query);
+    const fallbackSuppliers = sampleSuppliers.filter((supplier) => {
+      if (query.isActive !== undefined && supplier.isActive !== query.isActive) return false;
+      return true;
+    });
 
     return NextResponse.json({
       success: true,
-      data: suppliers,
+      data: suppliers.length ? suppliers : fallbackSuppliers,
       pagination: {
-        total,
+        total: suppliers.length ? total : fallbackSuppliers.length,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil((suppliers.length ? total : fallbackSuppliers.length) / limit),
       },
     });
   } catch (error: any) {

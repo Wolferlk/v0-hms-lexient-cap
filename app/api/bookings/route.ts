@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import { Booking } from '@/lib/models/Booking';
 import { Room } from '@/lib/models/Room';
 import { Customer } from '@/lib/models/Customer';
+import { sampleBookings } from '@/lib/sampleData';
 
 function generateBookingId(): string {
   return `BK-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -30,10 +31,16 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
+    const fallbackBookings = sampleBookings.filter((booking) => {
+      if (query.status && booking.status !== query.status) return false;
+      if (query.customerId && booking.customerId !== query.customerId) return false;
+      return true;
+    });
+
     return NextResponse.json(
       {
         success: true,
-        data: bookings,
+        data: bookings.length ? bookings : fallbackBookings,
       },
       { status: 200 }
     );

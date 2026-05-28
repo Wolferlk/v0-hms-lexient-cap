@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { WeddingHall } from '@/lib/models/WeddingHall';
+import { sampleWeddingHalls } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,15 +28,21 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     const total = await WeddingHall.countDocuments(query);
+    const fallbackHalls = sampleWeddingHalls.filter((hall) => {
+      if (hall.capacity < minCapacity) return false;
+      if (hall.basePrice > maxPrice) return false;
+      if (availability && hall.availability !== availability) return false;
+      return true;
+    });
 
     return NextResponse.json({
       success: true,
-      data: halls,
+      data: halls.length ? halls : fallbackHalls,
       pagination: {
-        total,
+        total: halls.length ? total : fallbackHalls.length,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil((halls.length ? total : fallbackHalls.length) / limit),
       },
     });
   } catch (error: any) {

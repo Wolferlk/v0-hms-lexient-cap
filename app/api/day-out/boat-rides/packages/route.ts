@@ -1,13 +1,14 @@
 import { connectDB } from '@/lib/mongodb';
 import { BoatRidePackage } from '@/lib/models/DayOut';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleBoatRidePackages } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
     const packages = await BoatRidePackage.find().sort({ createdAt: -1 });
-    return NextResponse.json({ success: true, data: packages });
+    return NextResponse.json({ success: true, data: packages.length ? packages : sampleBoatRidePackages });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

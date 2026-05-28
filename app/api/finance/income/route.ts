@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
-import { Income, Expense, Booking } from '@/lib/models/Finance';
+import { Income, Expense } from '@/lib/models/Finance';
+import { sampleEmployees, sampleIncome, withPopulatedRelations } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,16 +39,23 @@ export async function GET(request: NextRequest) {
       { $match: query },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]);
+    const fallbackIncome = withPopulatedRelations(sampleIncome, {
+      recordedBy: sampleEmployees,
+    }).filter((entry) => {
+      if (query.source && entry.source !== query.source) return false;
+      return true;
+    });
+    const fallbackTotalAmount = fallbackIncome.reduce((sum, entry) => sum + entry.amount, 0);
 
     return NextResponse.json({
       success: true,
-      data: income,
-      totalAmount: totalAmount[0]?.total || 0,
+      data: income.length ? income : fallbackIncome,
+      totalAmount: income.length ? totalAmount[0]?.total || 0 : fallbackTotalAmount,
       pagination: {
-        total,
+        total: income.length ? total : fallbackIncome.length,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil((income.length ? total : fallbackIncome.length) / limit),
       },
     });
   } catch (error: any) {

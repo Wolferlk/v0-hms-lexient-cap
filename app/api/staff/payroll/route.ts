@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb';
 import { Payroll, Employee } from '@/lib/models/Staff';
 import { NextRequest, NextResponse } from 'next/server';
+import { sampleEmployees, samplePayrolls, withPopulatedRelations } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,20 @@ export async function GET(request: NextRequest) {
       .populate('employeeId', 'name email salary')
       .sort({ month: -1 });
 
-    return NextResponse.json({ success: true, data: payrolls });
+    const fallbackPayrolls = withPopulatedRelations(samplePayrolls, {
+      employeeId: sampleEmployees,
+    }).filter((payroll) => {
+      if (query.employeeId) {
+        const resolvedEmployeeId =
+          typeof payroll.employeeId === 'object' ? payroll.employeeId?._id : payroll.employeeId;
+        if (resolvedEmployeeId !== query.employeeId) return false;
+      }
+      if (query.month && payroll.month !== query.month) return false;
+      if (query.status && payroll.status !== query.status) return false;
+      return true;
+    });
+
+    return NextResponse.json({ success: true, data: payrolls.length ? payrolls : fallbackPayrolls });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { WeddingEvent, WeddingHall } from '@/lib/models/WeddingHall';
+import { sampleWeddingEvents, sampleWeddingHalls, withPopulatedRelations } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,15 +25,25 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     const total = await WeddingEvent.countDocuments(query);
+    const fallbackEvents = withPopulatedRelations(sampleWeddingEvents, {
+      hallId: sampleWeddingHalls,
+    }).filter((event) => {
+      if (query.status && event.status !== query.status) return false;
+      if (query.hallId) {
+        const resolvedHallId = typeof event.hallId === 'object' ? event.hallId?._id : event.hallId;
+        if (resolvedHallId !== query.hallId) return false;
+      }
+      return true;
+    });
 
     return NextResponse.json({
       success: true,
-      data: events,
+      data: events.length ? events : fallbackEvents,
       pagination: {
-        total,
+        total: events.length ? total : fallbackEvents.length,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil((events.length ? total : fallbackEvents.length) / limit),
       },
     });
   } catch (error: any) {
