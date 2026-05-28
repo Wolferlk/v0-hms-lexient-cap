@@ -100,3 +100,19 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Package ID required' }, { status: 400 });
+    }
+
+    await BoatRidePackage.findByIdAndDelete(id);
+    return NextResponse.json({ success: true, message: 'Boat package deleted' });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

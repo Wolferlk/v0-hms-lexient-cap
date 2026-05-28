@@ -24,13 +24,31 @@ const DayOutPackageSchema = new mongoose.Schema({
 
 const GroupBookingSchema = new mongoose.Schema({
   packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'DayOutPackage', required: true },
-  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
   groupName: { type: String, required: true },
   bookingDate: { type: Date, required: true, index: true },
   numberOfPeople: { type: Number, required: true, min: 1 },
   totalPrice: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
   depositAmount: { type: Number, required: true },
   balanceAmount: { type: Number, required: true },
+  advancePaid: { type: Number, default: 0 },
+  payments: [
+    {
+      amount: { type: Number, required: true },
+      method: { type: String, required: true },
+      date: { type: Date, default: Date.now },
+      notes: String,
+    },
+  ],
+  additionalItems: [
+    {
+      name: { type: String, required: true },
+      quantity: { type: Number, required: true, min: 1 },
+      unitPrice: { type: Number, required: true, min: 0 },
+      total: { type: Number, required: true, min: 0 },
+    },
+  ],
   paymentStatus: {
     type: String,
     enum: ['pending', 'partial', 'paid'],
@@ -80,15 +98,40 @@ const BoatRidePackageSchema = new mongoose.Schema({
 
 const BoatRideBookingSchema = new mongoose.Schema({
   packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'BoatRidePackage', required: true },
-  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
   bookingDate: { type: Date, required: true, index: true },
   departureTime: { type: String, required: true },
   numberOfPassengers: { type: Number, required: true, min: 1 },
+  contactPerson: {
+    name: String,
+    phone: String,
+    email: String,
+  },
   totalPrice: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
+  depositAmount: { type: Number, required: true },
+  balanceAmount: { type: Number, required: true },
+  advancePaid: { type: Number, default: 0 },
+  payments: [
+    {
+      amount: { type: Number, required: true },
+      method: { type: String, required: true },
+      date: { type: Date, default: Date.now },
+      notes: String,
+    },
+  ],
+  additionalItems: [
+    {
+      name: { type: String, required: true },
+      quantity: { type: Number, required: true, min: 1 },
+      unitPrice: { type: Number, required: true, min: 0 },
+      total: { type: Number, required: true, min: 0 },
+    },
+  ],
   paymentStatus: {
     type: String,
-    enum: ['unpaid', 'partial', 'paid'],
-    default: 'unpaid',
+    enum: ['pending', 'partial', 'paid'],
+    default: 'pending',
   },
   status: {
     type: String,

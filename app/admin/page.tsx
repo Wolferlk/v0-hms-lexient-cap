@@ -7,7 +7,7 @@ import BookingManagement from '@/components/admin/BookingManagement';
 import BookingComIntegration from '@/components/admin/BookingComIntegration';
 import InventoryManagement from '@/components/admin/InventoryManagement';
 import FinancialManagement from '@/components/admin/FinancialManagement';
-import WeddingHallManagement from '@/components/admin/WeddingHallManagement';
+import WeddingHallManagementAdvanced from '@/components/admin/WeddingHallManagementAdvanced';
 import RestaurantManagement from '@/components/admin/RestaurantManagement';
 import DayOutManagement from '@/components/admin/DayOutManagement';
 import StaffManagement from '@/components/admin/StaffManagement';
@@ -121,7 +121,7 @@ export default function AdminPage() {
             {activeTab === 'staff'      && <StaffManagement />}
             {activeTab === 'inventory'  && <InventoryManagement />}
             {activeTab === 'finance'    && <FinancialManagement />}
-            {activeTab === 'wedding'    && <WeddingHallManagement />}
+            {activeTab === 'wedding'    && <WeddingHallManagementAdvanced />}
             {activeTab === 'analytics'  && <AnalyticsReporting />}
             {activeTab === 'bookingcom' && <BookingComIntegration />}
           </div>

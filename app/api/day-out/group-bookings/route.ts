@@ -53,9 +53,11 @@ export async function POST(request: NextRequest) {
       numberOfPeople,
       contactPerson,
       specialRequests,
+      advanceAmount,
+      paymentMethod,
     } = body;
 
-    if (!packageId || !customerId || !groupName || !bookingDate || !numberOfPeople) {
+    if (!packageId || !groupName || !bookingDate || !numberOfPeople) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -94,10 +96,16 @@ export async function POST(request: NextRequest) {
       bookingDate: new Date(bookingDate),
       numberOfPeople,
       totalPrice,
+      totalAmount: totalPrice,
       depositAmount,
       balanceAmount,
+      advancePaid: advanceAmount > 0 ? advanceAmount : 0,
+      payments: advanceAmount > 0 ? [{ amount: advanceAmount, method: paymentMethod || 'cash', date: new Date(), notes: 'Advance payment' }] : [],
+      additionalItems: [],
       contactPerson,
       specialRequests,
+      paymentStatus: advanceAmount > 0 ? 'partial' : 'pending',
+      status: advanceAmount > 0 ? 'confirmed' : 'pending',
     });
 
     await booking.save();
@@ -117,13 +125,113 @@ export async function PUT(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id, action, amount, method, notes, additionalItems, itemIndex, itemUpdate, ...updateData } = body;
 
     if (!id) {
       return NextResponse.json(
         { success: false, error: 'Booking ID required' },
         { status: 400 }
       );
+    }
+
+    const booking = await GroupBooking.findById(id);
+    if (!booking) {
+      return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 });
+    }
+
+    if (action === 'pay') {
+      if (!amount || amount <= 0) {
+        return NextResponse.json({ success: false, error: 'Payment amount required' }, { status: 400 });
+      }
+      booking.payments.push({ amount, method: method || 'cash', date: new Date(), notes: notes || '' });
+      booking.advancePaid = (booking.advancePaid || 0) + amount;
+      booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
+      if (booking.advancePaid >= booking.depositAmount && booking.status === 'pending') {
+        booking.status = 'confirmed';
+      }
+      if (booking.advancePaid >= booking.totalAmount) {
+        booking.paymentStatus = 'paid';
+      } else if (booking.advancePaid > 0) {
+        booking.paymentStatus = 'partial';
+      }
+      booking.updatedAt = new Date();
+      await booking.save();
+      return NextResponse.json({ success: true, data: booking });
+    }
+
+    if (action === 'add_items') {
+      if (!additionalItems || !Array.isArray(additionalItems) || additionalItems.length === 0) {
+        return NextResponse.json({ success: false, error: 'No additional items provided' }, { status: 400 });
+      }
+      for (const item of additionalItems) {
+        booking.additionalItems.push({
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.unitPrice * item.quantity,
+        });
+      }
+      const addedTotal = booking.additionalItems.reduce((sum: number, item: any) => sum + item.total, 0);
+      booking.totalAmount = booking.totalPrice + addedTotal;
+      booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
+      booking.updatedAt = new Date();
+      await booking.save();
+      return NextResponse.json({ success: true, data: booking });
+    }
+
+    if (action === 'edit_item') {
+      if (itemIndex === undefined || itemIndex < 0 || itemIndex >= booking.additionalItems.length) {
+        return NextResponse.json({ success: false, error: 'Invalid item index' }, { status: 400 });
+      }
+      const existing = booking.additionalItems[itemIndex];
+      booking.additionalItems[itemIndex] = {
+        name: itemUpdate?.name || existing.name,
+        quantity: itemUpdate?.quantity ?? existing.quantity,
+        unitPrice: itemUpdate?.unitPrice ?? existing.unitPrice,
+        total: (itemUpdate?.unitPrice ?? existing.unitPrice) * (itemUpdate?.quantity ?? existing.quantity),
+      };
+      const addedTotal = booking.additionalItems.reduce((sum: number, item: any) => sum + item.total, 0);
+      booking.totalAmount = booking.totalPrice + addedTotal;
+      booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
+      booking.updatedAt = new Date();
+      await booking.save();
+      return NextResponse.json({ success: true, data: booking });
+    }
+
+    if (action === 'delete_item') {
+      if (itemIndex === undefined || itemIndex < 0 || itemIndex >= booking.additionalItems.length) {
+        return NextResponse.json({ success: false, error: 'Invalid item index' }, { status: 400 });
+      }
+      booking.additionalItems.splice(itemIndex, 1);
+      const addedTotal = booking.additionalItems.reduce((sum: number, item: any) => sum + item.total, 0);
+      booking.totalAmount = booking.totalPrice + addedTotal;
+      booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
+      booking.updatedAt = new Date();
+      await booking.save();
+      return NextResponse.json({ success: true, data: booking });
+    }
+
+    if (action === 'close') {
+      if (booking.status !== 'confirmed') {
+        return NextResponse.json({ success: false, error: 'Only confirmed bookings can be closed' }, { status: 400 });
+      }
+      if (amount && amount > 0) {
+        booking.payments.push({ amount, method: method || 'cash', date: new Date(), notes: notes || '' });
+        booking.advancePaid = (booking.advancePaid || 0) + amount;
+      }
+      booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
+      booking.paymentStatus = booking.balanceAmount === 0 ? 'paid' : booking.paymentStatus;
+      booking.status = 'completed';
+      booking.updatedAt = new Date();
+      await booking.save();
+      return NextResponse.json({ success: true, data: booking });
+    }
+
+    if (action === 'cancel') {
+      booking.status = 'cancelled';
+      booking.updatedAt = new Date();
+      await booking.save();
+      return NextResponse.json({ success: true, data: booking });
     }
 
     const updated = await GroupBooking.findByIdAndUpdate(
@@ -145,5 +253,21 @@ export async function PUT(request: NextRequest) {
       { success: false, error: error.message },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Booking ID required' }, { status: 400 });
+    }
+
+    await GroupBooking.findByIdAndDelete(id);
+    return NextResponse.json({ success: true, message: 'Group booking deleted' });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

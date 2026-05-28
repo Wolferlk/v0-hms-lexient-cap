@@ -68,12 +68,21 @@ export async function POST(request: NextRequest) {
 
     const hall = new WeddingHall({
       name: body.name,
+      hallType: body.hallType || 'standard',
       capacity: body.capacity,
       area: body.area || 0,
       basePrice: body.basePrice,
       amenities: body.amenities || [],
       images: body.images || [],
       description: body.description || '',
+      features: body.features || {
+        airConditioned: false,
+        parking: false,
+        kitchenAccess: false,
+        danceFloor: false,
+        stage: false,
+        soundSystem: false,
+      },
     });
 
     await hall.save();

@@ -4,115 +4,89 @@ import { Booking } from '@/lib/models/Booking';
 import { Customer } from '@/lib/models/Customer';
 import { bookingComService } from '@/lib/bookingComService';
 
-/**
- * POST /api/bookingcom/pull-bookings
- * Pulls bookings from Booking.com and syncs them locally
- */
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    // Pull bookings from Booking.com
-    const result = await bookingComService.pullBookings(50);
+    const body = await request.json().catch(() => ({}));
+    const { status = 'new', dateFrom, dateTo, limit = 50 } = body;
 
-    if (!result.success || !result.bookings) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.message,
-        },
-        { status: 400 }
-      );
+    const result = await bookingComService.pullReservations({ status, dateFrom, dateTo, limit });
+
+    if (!result.success || !result.reservations) {
+      return NextResponse.json({ success: false, error: result.error || result.message }, { status: 400 });
     }
 
-    let syncedCount = 0;
-    const errors = [];
+    let created = 0;
+    let skipped = 0;
+    let updated = 0;
+    const errors: { id: string; error: string }[] = [];
 
-    // Sync each booking to local database
-    for (const bcomBooking of result.bookings) {
+    for (const r of result.reservations) {
       try {
-        // Check if booking already exists
-        const existingBooking = await Booking.findOne({
-          externalBookingId: bcomBooking.id,
-        });
+        const existing = await Booking.findOne({ externalBookingId: r.id });
 
-        if (existingBooking) {
-          console.log(`[v0] Booking ${bcomBooking.id} already synced`);
+        if (existing) {
+          // Update status if changed
+          const newStatus = r.status === 'cancelled' ? 'cancelled' : existing.status;
+          if (newStatus !== existing.status) {
+            existing.status = newStatus;
+            await existing.save();
+            updated++;
+          } else {
+            skipped++;
+          }
           continue;
         }
 
-        // Create customer if doesn't exist
-        let customerId = '';
-        const existingCustomer = await Customer.findOne({
-          email: bcomBooking.email,
-        });
-
-        if (existingCustomer) {
-          customerId = existingCustomer._id.toString();
-        } else {
-          const newCustomer = new Customer({
-            email: bcomBooking.email,
-            name: bcomBooking.guest_name,
-            phone: bcomBooking.phone,
-          });
-          await newCustomer.save();
-          customerId = newCustomer._id.toString();
+        // Upsert customer
+        let customer = await Customer.findOne({ email: r.email });
+        if (!customer) {
+          customer = new Customer({ name: r.guest_name, email: r.email, phone: r.phone });
+          await customer.save();
         }
 
-        // Create booking
-        const bookingId = `BK-BCOM-${bcomBooking.id}`;
-        const newBooking = new Booking({
-          bookingId,
-          customerId,
-          customerName: bcomBooking.guest_name,
-          customerEmail: bcomBooking.email,
-          customerPhone: bcomBooking.phone,
-          roomIds: [], // Booking.com doesn't provide room mapping, would need manual matching
-          checkInDate: new Date(bcomBooking.check_in_date),
-          checkOutDate: new Date(bcomBooking.check_out_date),
-          numberOfNights: Math.ceil(
-            (new Date(bcomBooking.check_out_date).getTime() -
-              new Date(bcomBooking.check_in_date).getTime()) /
-              (1000 * 60 * 60 * 24)
-          ),
-          numberOfGuests:
-            bcomBooking.num_adults + (bcomBooking.num_children || 0),
-          totalAmount: bcomBooking.total_price,
-          status: bcomBooking.status === 'confirmed' ? 'confirmed' : 'pending',
-          paymentStatus: 'paid', // Booking.com bookings are usually pre-paid
+        const nights = Math.ceil(
+          (new Date(r.check_out_date).getTime() - new Date(r.check_in_date).getTime()) /
+          (1000 * 60 * 60 * 24)
+        );
+
+        const booking = new Booking({
+          bookingId: `BK-BCOM-${r.id}`,
+          customerId: customer._id,
+          customerName: r.guest_name,
+          customerEmail: r.email,
+          customerPhone: r.phone || '',
+          roomIds: [],
+          checkInDate: new Date(r.check_in_date),
+          checkOutDate: new Date(r.check_out_date),
+          numberOfNights: nights,
+          numberOfGuests: r.num_adults + (r.num_children || 0),
+          totalAmount: r.total_price,
+          status: r.status === 'confirmed' ? 'confirmed' : 'pending',
+          paymentStatus: 'paid',
           bookingFromSource: 'booking.com',
-          externalBookingId: bcomBooking.id,
+          externalBookingId: r.id,
+          notes: r.special_requests || '',
         });
 
-        await newBooking.save();
-        syncedCount++;
-      } catch (err) {
-        console.error(`[v0] Error syncing Booking.com booking ${bcomBooking.id}:`, err);
-        errors.push({
-          bookingId: bcomBooking.id,
-          error: 'Failed to sync booking',
-        });
+        await booking.save();
+        created++;
+      } catch (err: any) {
+        errors.push({ id: r.id, error: err.message });
       }
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        syncedCount,
-        totalBookings: result.bookings.length,
-        errors: errors.length > 0 ? errors : undefined,
-        message: `Successfully synced ${syncedCount} bookings from Booking.com`,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('[v0] Error pulling bookings from Booking.com:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to pull bookings from Booking.com',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: true,
+      message: `Sync complete: ${created} created, ${updated} updated, ${skipped} skipped`,
+      total: result.reservations.length,
+      created,
+      updated,
+      skipped,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IWeddingHall extends Document {
   name: string;
+  hallType: 'premium' | 'standard' | 'basic' | 'indoor' | 'outdoor';
   capacity: number;
   area: number;
   basePrice: number;
@@ -9,6 +10,14 @@ export interface IWeddingHall extends Document {
   images: string[];
   description: string;
   availability: 'available' | 'booked' | 'maintenance';
+  features: {
+    airConditioned: boolean;
+    parking: boolean;
+    kitchenAccess: boolean;
+    danceFloor: boolean;
+    stage: boolean;
+    soundSystem: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -93,6 +102,9 @@ export interface IWeddingQuotation extends Document {
   }[];
   quotationDate: Date;
   validUntil: Date;
+  activatedDate?: Date;
+  expiryDate?: Date;
+  qrCode?: string;
   status: 'draft' | 'active' | 'expired' | 'closed' | 'cancelled';
   notes: string;
   createdAt: Date;
@@ -104,6 +116,11 @@ export interface IWeddingQuotation extends Document {
 const weddingHallSchema = new Schema<IWeddingHall>(
   {
     name: { type: String, required: true },
+    hallType: {
+      type: String,
+      enum: ['premium', 'standard', 'basic', 'indoor', 'outdoor'],
+      default: 'standard',
+    },
     capacity: { type: Number, required: true },
     area: { type: Number, required: true },
     basePrice: { type: Number, required: true },
@@ -114,6 +131,14 @@ const weddingHallSchema = new Schema<IWeddingHall>(
       type: String,
       enum: ['available', 'booked', 'maintenance'],
       default: 'available',
+    },
+    features: {
+      airConditioned: { type: Boolean, default: false },
+      parking: { type: Boolean, default: false },
+      kitchenAccess: { type: Boolean, default: false },
+      danceFloor: { type: Boolean, default: false },
+      stage: { type: Boolean, default: false },
+      soundSystem: { type: Boolean, default: false },
     },
   },
   { timestamps: true }
@@ -234,6 +259,9 @@ const weddingQuotationSchema = new Schema<IWeddingQuotation>(
     payments: [quotationPaymentSchema],
     quotationDate: { type: Date, default: Date.now },
     validUntil: { type: Date, required: true },
+    activatedDate: { type: Date },
+    expiryDate: { type: Date },
+    qrCode: { type: String },
     status: {
       type: String,
       enum: ['draft', 'active', 'expired', 'closed', 'cancelled'],

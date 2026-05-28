@@ -22,15 +22,31 @@ export async function GET(request: NextRequest) {
       if (!status) query.status = { $in: ['draft', 'active'] };
     }
 
-    // Auto-expire past-validUntil quotations
+    // Auto-expire quotations that have exceeded validUntil date
+    const now = new Date();
     await WeddingQuotation.updateMany(
-      { status: 'draft', validUntil: { $lt: new Date() } },
+      { 
+        status: 'active', 
+        validUntil: { $lt: now },
+        expiryDate: { $exists: false }
+      },
+      { 
+        $set: { 
+          status: 'expired',
+          expiryDate: now
+        } 
+      }
+    );
+
+    // Also expire draft quotations
+    await WeddingQuotation.updateMany(
+      { status: 'draft', validUntil: { $lt: now } },
       { $set: { status: 'expired' } }
     );
 
     let q = WeddingQuotation.find(query)
-      .populate('hallId', 'name capacity basePrice')
-      .populate('menuPackageId', 'name pricePerHead')
+      .populate('hallId', 'name capacity basePrice hallType features')
+      .populate('menuPackageId', 'name pricePerHead items description')
       .sort(upcoming === 'true' ? { eventDate: 1 } : { createdAt: -1 });
 
     if (limit > 0) q = q.limit(limit);

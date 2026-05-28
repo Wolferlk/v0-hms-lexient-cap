@@ -1,21 +1,17 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 
-// Booking.com API Configuration
-const BOOKING_COM_API_KEY = process.env.BOOKING_COM_API_KEY || '';
-const BOOKING_COM_API_SECRET = process.env.BOOKING_COM_API_SECRET || '';
-const BOOKING_COM_PROPERTY_ID = process.env.BOOKING_COM_PROPERTY_ID || '';
-const BOOKING_COM_BASE_URL = 'https://api.booking.com/v1';
+// ── Config ────────────────────────────────────────────────────────────────────
+const API_KEY        = process.env.BOOKING_COM_API_KEY     || '';
+const API_SECRET     = process.env.BOOKING_COM_API_SECRET  || '';
+const PROPERTY_ID    = process.env.BOOKING_COM_PROPERTY_ID || '';
 
-interface BookingComRoom {
-  id: string;
-  name: string;
-  type: string;
-  max_occupancy: number;
-  rate: number;
-  available_rooms: number;
-}
+// Booking.com Connectivity API v2
+// Auth: Basic base64(apiKey:apiSecret)
+const BASE_URL = 'https://supply.booking.com/supply/v2';
 
-interface BookingComBooking {
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface BookingComReservation {
   id: string;
   guest_name: string;
   email: string;
@@ -24,247 +20,235 @@ interface BookingComBooking {
   check_out_date: string;
   num_adults: number;
   num_children: number;
-  status: string;
+  status: 'new' | 'confirmed' | 'cancelled' | 'no_show' | 'invalid';
   total_price: number;
+  currency: string;
+  room_id?: string;
+  room_type?: string;
+  special_requests?: string;
+  created_at: string;
 }
+
+export interface RateUpdate {
+  roomId: string;
+  ratePlanId: string;
+  dates: { date: string; rate: number }[];
+}
+
+export interface AvailabilityUpdate {
+  roomId: string;
+  dates: { date: string; available: number; closed?: boolean }[];
+}
+
+export interface SyncResult {
+  success: boolean;
+  message: string;
+  data?: any;
+  error?: string;
+  statusCode?: number;
+}
+
+// ── Service ───────────────────────────────────────────────────────────────────
 
 class BookingComService {
   private client: AxiosInstance;
-  private apiKey: string;
-  private propertyId: string;
 
   constructor() {
-    this.apiKey = BOOKING_COM_API_KEY;
-    this.propertyId = BOOKING_COM_PROPERTY_ID;
-
+    const credentials = Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64');
     this.client = axios.create({
-      baseURL: BOOKING_COM_BASE_URL,
+      baseURL: BASE_URL,
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Basic ${credentials}`,
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
+      timeout: 15000,
+    });
+
+    // Log requests in dev
+    this.client.interceptors.request.use(req => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[Booking.com] ${req.method?.toUpperCase()} ${req.url}`);
+      }
+      return req;
     });
   }
 
-  /**
-   * Check if Booking.com is configured
-   */
   isConfigured(): boolean {
-    return !!this.apiKey && !!this.propertyId;
+    return !!(API_KEY && API_SECRET && PROPERTY_ID);
   }
 
-  /**
-   * Push room inventory to Booking.com
-   * This syncs your room availability and pricing
-   */
-  async pushRoomInventory(rooms: any[]): Promise<{ success: boolean; message: string }> {
-    try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'Booking.com API not configured. Please set BOOKING_COM_API_KEY and BOOKING_COM_PROPERTY_ID.',
-        };
-      }
+  getPropertyId(): string {
+    return PROPERTY_ID;
+  }
 
-      // Transform internal room format to Booking.com format
-      const bookingComRooms = rooms.map((room) => ({
-        id: room._id.toString(),
+  private handleError(err: unknown): SyncResult {
+    if (axios.isAxiosError(err)) {
+      const e = err as AxiosError<any>;
+      const code = e.response?.status;
+      const msg  = e.response?.data?.message || e.response?.data?.error || e.message;
+      if (code === 401) return { success: false, error: 'Invalid API credentials — check BOOKING_COM_API_KEY and BOOKING_COM_API_SECRET', statusCode: 401, message: '' };
+      if (code === 403) return { success: false, error: 'Access denied — check BOOKING_COM_PROPERTY_ID or API permissions', statusCode: 403, message: '' };
+      if (code === 404) return { success: false, error: 'Property not found — verify BOOKING_COM_PROPERTY_ID', statusCode: 404, message: '' };
+      if (code === 429) return { success: false, error: 'Rate limited — wait before retrying', statusCode: 429, message: '' };
+      return { success: false, error: `API error ${code}: ${msg}`, statusCode: code, message: '' };
+    }
+    return { success: false, error: String(err), message: '' };
+  }
+
+  // ── Connection Test ─────────────────────────────────────────────────────────
+  async testConnection(): Promise<SyncResult> {
+    if (!this.isConfigured()) {
+      return { success: false, error: 'Missing credentials: BOOKING_COM_API_KEY, BOOKING_COM_API_SECRET, BOOKING_COM_PROPERTY_ID', message: 'Not configured' };
+    }
+    try {
+      const res = await this.client.get(`/properties/${PROPERTY_ID}`);
+      return {
+        success: true,
+        message: 'Connection successful',
+        data: {
+          propertyId: PROPERTY_ID,
+          propertyName: res.data?.name || 'Connected',
+          country: res.data?.country,
+          currency: res.data?.currency,
+        },
+      };
+    } catch (err) {
+      return this.handleError(err);
+    }
+  }
+
+  // ── Pull Reservations ───────────────────────────────────────────────────────
+  async pullReservations(options: {
+    status?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<SyncResult & { reservations?: BookingComReservation[] }> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
+    try {
+      const res = await this.client.get(`/properties/${PROPERTY_ID}/reservations`, {
+        params: {
+          status: options.status || 'new',
+          arrival_from: options.dateFrom,
+          arrival_to: options.dateTo,
+          rows: options.limit || 50,
+          offset: options.offset || 0,
+        },
+      });
+      const reservations: BookingComReservation[] = res.data?.result || res.data?.reservations || [];
+      return { success: true, message: `Fetched ${reservations.length} reservations`, reservations };
+    } catch (err) {
+      return this.handleError(err);
+    }
+  }
+
+  // ── Push Room Inventory ─────────────────────────────────────────────────────
+  async pushRoomInventory(rooms: any[]): Promise<SyncResult> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
+    try {
+      const payload = rooms.map(room => ({
+        id: room._id?.toString(),
         name: `Room ${room.roomNumber}`,
-        type: room.category,
-        max_occupancy: room.capacity,
-        rate: room.pricePerNight,
-        available_rooms: room.isAvailable ? 1 : 0,
+        type: room.category || 'standard',
+        max_occupancy: room.capacity || 2,
+        base_rate: room.pricePerNight,
+        available_count: room.status === 'available' ? 1 : 0,
       }));
-
-      // Send to Booking.com
-      const response = await this.client.post(
-        `/properties/${this.propertyId}/rooms`,
-        {
-          rooms: bookingComRooms,
-        }
-      );
-
-      console.log('[v0] Booking.com inventory push response:', response.data);
-
-      return {
-        success: true,
-        message: 'Room inventory synced to Booking.com successfully',
-      };
-    } catch (error) {
-      console.error('[v0] Error pushing inventory to Booking.com:', error);
-      return {
-        success: false,
-        message: 'Failed to sync inventory to Booking.com',
-      };
+      const res = await this.client.put(`/properties/${PROPERTY_ID}/rooms`, { rooms: payload });
+      return { success: true, message: `${rooms.length} rooms pushed to Booking.com`, data: res.data };
+    } catch (err) {
+      return this.handleError(err);
     }
   }
 
-  /**
-   * Pull booking data from Booking.com
-   * This fetches recent bookings made through Booking.com
-   */
-  async pullBookings(limit: number = 50): Promise<{
-    success: boolean;
-    bookings?: BookingComBooking[];
-    message: string;
-  }> {
+  // ── Update Rates ────────────────────────────────────────────────────────────
+  async updateRates(updates: RateUpdate[]): Promise<SyncResult> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
     try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'Booking.com API not configured',
-        };
+      const results: SyncResult[] = [];
+      for (const u of updates) {
+        const res = await this.client.put(
+          `/properties/${PROPERTY_ID}/rooms/${u.roomId}/rates/${u.ratePlanId}`,
+          { rates: u.dates }
+        );
+        results.push({ success: true, message: `Rates updated for room ${u.roomId}`, data: res.data });
       }
-
-      const response = await this.client.get(
-        `/properties/${this.propertyId}/bookings`,
-        {
-          params: {
-            limit,
-            status: 'confirmed',
-          },
-        }
-      );
-
-      console.log('[v0] Booking.com bookings response:', response.data);
-
-      return {
-        success: true,
-        bookings: response.data.bookings || [],
-        message: `Retrieved ${response.data.bookings?.length || 0} bookings from Booking.com`,
-      };
-    } catch (error) {
-      console.error('[v0] Error pulling bookings from Booking.com:', error);
-      return {
-        success: false,
-        message: 'Failed to pull bookings from Booking.com',
-      };
+      return { success: true, message: `Rates updated for ${updates.length} rooms`, data: results };
+    } catch (err) {
+      return this.handleError(err);
     }
   }
 
-  /**
-   * Get availability data from Booking.com
-   */
-  async getAvailability(
-    checkInDate: string,
-    checkOutDate: string
-  ): Promise<{
-    success: boolean;
-    availability?: any;
-    message: string;
-  }> {
+  // ── Update Availability ─────────────────────────────────────────────────────
+  async updateAvailability(updates: AvailabilityUpdate[]): Promise<SyncResult> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
     try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'Booking.com API not configured',
-        };
+      const results: SyncResult[] = [];
+      for (const u of updates) {
+        const res = await this.client.put(
+          `/properties/${PROPERTY_ID}/rooms/${u.roomId}/availability`,
+          { availability: u.dates }
+        );
+        results.push({ success: true, message: `Availability updated for room ${u.roomId}`, data: res.data });
       }
-
-      const response = await this.client.get(
-        `/properties/${this.propertyId}/availability`,
-        {
-          params: {
-            check_in_date: checkInDate,
-            check_out_date: checkOutDate,
-          },
-        }
-      );
-
-      return {
-        success: true,
-        availability: response.data,
-        message: 'Availability data retrieved',
-      };
-    } catch (error) {
-      console.error('[v0] Error getting availability from Booking.com:', error);
-      return {
-        success: false,
-        message: 'Failed to get availability from Booking.com',
-      };
+      return { success: true, message: `Availability updated for ${updates.length} rooms`, data: results };
+    } catch (err) {
+      return this.handleError(err);
     }
   }
 
-  /**
-   * Update booking status on Booking.com
-   */
-  async updateBookingStatus(
-    bookingId: string,
-    status: 'confirmed' | 'cancelled' | 'completed'
-  ): Promise<{ success: boolean; message: string }> {
+  // ── Update Reservation Status ───────────────────────────────────────────────
+  async updateReservationStatus(
+    reservationId: string,
+    status: 'confirmed' | 'cancelled' | 'no_show'
+  ): Promise<SyncResult> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
     try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'Booking.com API not configured',
-        };
-      }
-
-      const response = await this.client.put(
-        `/properties/${this.propertyId}/bookings/${bookingId}`,
-        {
-          status,
-        }
+      const res = await this.client.patch(
+        `/properties/${PROPERTY_ID}/reservations/${reservationId}`,
+        { status }
       );
-
-      return {
-        success: true,
-        message: `Booking status updated to ${status}`,
-      };
-    } catch (error) {
-      console.error('[v0] Error updating booking status on Booking.com:', error);
-      return {
-        success: false,
-        message: 'Failed to update booking status on Booking.com',
-      };
+      return { success: true, message: `Reservation ${reservationId} updated to ${status}`, data: res.data };
+    } catch (err) {
+      return this.handleError(err);
     }
   }
 
-  /**
-   * Sync a local booking to Booking.com
-   */
-  async syncLocalBookingToBcom(booking: any): Promise<{ success: boolean; message: string }> {
+  // ── Sync Single Local Booking to Booking.com ───────────────────────────────
+  async syncLocalBooking(booking: any): Promise<SyncResult> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
     try {
-      if (!this.isConfigured()) {
-        return {
-          success: false,
-          message: 'Booking.com API not configured',
-        };
-      }
-
-      const bookingComData = {
+      const payload = {
         guest_name: booking.customerName,
         email: booking.customerEmail,
         phone: booking.customerPhone,
-        check_in_date: booking.checkInDate,
-        check_out_date: booking.checkOutDate,
-        num_adults: booking.numberOfGuests,
-        num_children: 0,
-        total_price: booking.totalAmount - booking.discountAmount,
+        check_in_date: new Date(booking.checkInDate).toISOString().slice(0, 10),
+        check_out_date: new Date(booking.checkOutDate).toISOString().slice(0, 10),
+        num_adults: booking.numberOfGuests || 1,
+        total_price: booking.totalAmount,
         reference_id: booking.bookingId,
       };
+      const res = await this.client.post(`/properties/${PROPERTY_ID}/reservations`, payload);
+      return { success: true, message: 'Booking synced to Booking.com', data: res.data };
+    } catch (err) {
+      // Don't fail local booking if sync fails
+      const r = this.handleError(err);
+      return { ...r, message: 'Booking saved locally. Booking.com sync failed — will retry later.' };
+    }
+  }
 
-      const response = await this.client.post(
-        `/properties/${this.propertyId}/bookings`,
-        bookingComData
-      );
-
-      console.log('[v0] Booking synced to Booking.com:', response.data);
-
-      return {
-        success: true,
-        message: 'Booking synced to Booking.com',
-      };
-    } catch (error) {
-      console.error('[v0] Error syncing booking to Booking.com:', error);
-      // Don't fail the booking if Booking.com sync fails
-      return {
-        success: false,
-        message: 'Booking created locally but failed to sync to Booking.com',
-      };
+  // ── Get Property Info ───────────────────────────────────────────────────────
+  async getProperty(): Promise<SyncResult> {
+    if (!this.isConfigured()) return { success: false, error: 'Not configured', message: 'Missing credentials' };
+    try {
+      const res = await this.client.get(`/properties/${PROPERTY_ID}`);
+      return { success: true, message: 'Property info fetched', data: res.data };
+    } catch (err) {
+      return this.handleError(err);
     }
   }
 }
 
-// Export singleton instance
 export const bookingComService = new BookingComService();
