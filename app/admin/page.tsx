@@ -5,10 +5,22 @@ import { Navigation } from '@/components/Navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Home, Calendar, Users, Zap } from 'lucide-react';
+import {
+  BarChart3,
+  Home,
+  Calendar,
+  Users,
+  Zap,
+  Package,
+  DollarSign,
+  Heart,
+} from 'lucide-react';
 import RoomManagement from '@/components/admin/RoomManagement';
 import BookingManagement from '@/components/admin/BookingManagement';
 import BookingComIntegration from '@/components/admin/BookingComIntegration';
+import InventoryManagement from '@/components/admin/InventoryManagement';
+import FinancialManagement from '@/components/admin/FinancialManagement';
+import WeddingHallManagement from '@/components/admin/WeddingHallManagement';
 import Dashboard from '@/components/admin/Dashboard';
 
 export default function AdminPage() {
@@ -22,26 +34,38 @@ export default function AdminPage() {
         <h1 className="mb-8 text-3xl font-bold">Admin Dashboard</h1>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
+            <TabsTrigger value="dashboard" className="flex items-center gap-1">
               <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Dashboard</span>
+              <span className="hidden sm:inline text-xs">Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger value="rooms" className="flex items-center gap-2">
+            <TabsTrigger value="rooms" className="flex items-center gap-1">
               <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">Rooms</span>
+              <span className="hidden sm:inline text-xs">Rooms</span>
             </TabsTrigger>
-            <TabsTrigger value="bookings" className="flex items-center gap-2">
+            <TabsTrigger value="bookings" className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">Bookings</span>
+              <span className="hidden sm:inline text-xs">Bookings</span>
             </TabsTrigger>
-            <TabsTrigger value="bookingcom" className="flex items-center gap-2">
+            <TabsTrigger value="inventory" className="flex items-center gap-1">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Inventory</span>
+            </TabsTrigger>
+            <TabsTrigger value="finance" className="flex items-center gap-1">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden md:inline text-xs">Finance</span>
+            </TabsTrigger>
+            <TabsTrigger value="wedding" className="flex items-center gap-1">
+              <Heart className="h-4 w-4" />
+              <span className="hidden md:inline text-xs">Wedding</span>
+            </TabsTrigger>
+            <TabsTrigger value="bookingcom" className="flex items-center gap-1">
               <Zap className="h-4 w-4" />
-              <span className="hidden sm:inline">Booking.com</span>
+              <span className="hidden lg:inline text-xs">Booking.com</span>
             </TabsTrigger>
-            <TabsTrigger value="stats" className="flex items-center gap-2">
+            <TabsTrigger value="stats" className="flex items-center gap-1">
               <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Stats</span>
+              <span className="hidden lg:inline text-xs">Stats</span>
             </TabsTrigger>
           </TabsList>
 
@@ -55,6 +79,18 @@ export default function AdminPage() {
 
           <TabsContent value="bookings" className="space-y-6">
             <BookingManagement />
+          </TabsContent>
+
+          <TabsContent value="inventory" className="space-y-6">
+            <InventoryManagement />
+          </TabsContent>
+
+          <TabsContent value="finance" className="space-y-6">
+            <FinancialManagement />
+          </TabsContent>
+
+          <TabsContent value="wedding" className="space-y-6">
+            <WeddingHallManagement />
           </TabsContent>
 
           <TabsContent value="bookingcom" className="space-y-6">
