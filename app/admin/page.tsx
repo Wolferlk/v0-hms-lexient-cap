@@ -16,6 +16,7 @@ import {
   Heart,
   UtensilsCrossed,
   Anchor,
+  LineChart,
 } from 'lucide-react';
 import RoomManagement from '@/components/admin/RoomManagement';
 import BookingManagement from '@/components/admin/BookingManagement';
@@ -26,6 +27,7 @@ import WeddingHallManagement from '@/components/admin/WeddingHallManagement';
 import RestaurantManagement from '@/components/admin/RestaurantManagement';
 import DayOutManagement from '@/components/admin/DayOutManagement';
 import StaffManagement from '@/components/admin/StaffManagement';
+import AnalyticsReporting from '@/components/admin/AnalyticsReporting';
 import Dashboard from '@/components/admin/Dashboard';
 
 export default function AdminPage() {
@@ -76,13 +78,13 @@ export default function AdminPage() {
               <Heart className="h-4 w-4" />
               <span className="hidden md:inline text-xs">Wedding</span>
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-1">
+              <LineChart className="h-4 w-4" />
+              <span className="hidden lg:inline text-xs">Analytics</span>
+            </TabsTrigger>
             <TabsTrigger value="bookingcom" className="flex items-center gap-1">
               <Zap className="h-4 w-4" />
               <span className="hidden lg:inline text-xs">Booking.com</span>
-            </TabsTrigger>
-            <TabsTrigger value="stats" className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              <span className="hidden lg:inline text-xs">Stats</span>
             </TabsTrigger>
           </TabsList>
 
@@ -122,21 +124,12 @@ export default function AdminPage() {
             <WeddingHallManagement />
           </TabsContent>
 
-          <TabsContent value="bookingcom" className="space-y-6">
-            <BookingComIntegration />
+          <TabsContent value="analytics" className="space-y-6">
+            <AnalyticsReporting />
           </TabsContent>
 
-          <TabsContent value="stats" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Coming Soon</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Statistics and reports will be available here in the next phase.
-                </p>
-              </CardContent>
-            </Card>
+          <TabsContent value="bookingcom" className="space-y-6">
+            <BookingComIntegration />
           </TabsContent>
         </Tabs>
       </div>
