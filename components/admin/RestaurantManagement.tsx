@@ -182,6 +182,8 @@ export default function RestaurantManagement() {
   const [closePayMethod, setClosePayMethod] = useState('cash');
   const [closeNotes, setCloseNotes] = useState('');
   const [closeLoading, setCloseLoading] = useState(false);
+  const [mergeSourceTableId, setMergeSourceTableId] = useState('');
+  const [mergeLoading, setMergeLoading] = useState(false);
 
   const [addTableDialog, setAddTableDialog] = useState(false);
   const [newTableNum, setNewTableNum] = useState('');
@@ -289,6 +291,36 @@ export default function RestaurantManagement() {
       toast.error('Failed to update table session');
     } finally {
       setSessionLoading(false);
+    }
+  };
+
+  const handleMergeTable = async () => {
+    if (!selectedTable || !mergeSourceTableId) return;
+    if (mergeSourceTableId === selectedTable._id) {
+      toast.error('Select a different table to merge from');
+      return;
+    }
+    setMergeLoading(true);
+    try {
+      const res = await fetch(`/api/restaurant/tables/${selectedTable._id}/service`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'merge', sourceTableId: mergeSourceTableId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Tables merged into one bill');
+        setSelectedTable(data.data.table);
+        setTableOrder(data.data.order);
+        setMergeSourceTableId('');
+        fetchTables();
+      } else {
+        toast.error(data.error);
+      }
+    } catch {
+      toast.error('Failed to merge tables');
+    } finally {
+      setMergeLoading(false);
     }
   };
 
@@ -405,6 +437,26 @@ export default function RestaurantManagement() {
     }
   };
 
+  const handleDeleteTable = async (id?: string) => {
+    const tableId = id || editingTable?._id;
+    if (!tableId) return;
+    if (!confirm('Delete this table? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/restaurant/tables?id=${tableId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Table deleted');
+        setEditTableDialog(false);
+        setEditingTable(null);
+        fetchTables();
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err) {
+      toast.error('Failed to delete table');
+    }
+  };
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   const categories = ['all', ...Array.from(new Set(menuItems.map(m => m.category)))];
@@ -422,6 +474,13 @@ export default function RestaurantManagement() {
     reserved: 'bg-yellow-100 border-yellow-400 text-yellow-900',
     maintenance: 'bg-gray-100 border-gray-400 text-gray-600',
   }[s] ?? 'bg-gray-100 border-gray-400 text-gray-600');
+
+  const mergeCandidates = selectedTable
+    ? tables.filter(
+        (table) =>
+          table.status === 'occupied' && table._id !== selectedTable._id
+      )
+    : [];
 
   const addItemQty = (menuItemId: string) =>
     addingItems.find(i => i.menuItemId === menuItemId)?.quantity || 0;
@@ -627,9 +686,14 @@ export default function RestaurantManagement() {
                 </Select>
               </div>
             </div>
-            <Button className="w-full" onClick={handleEditTable} disabled={!editTableForm.tableNumber.trim()}>
-              Save Table Changes
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1 text-red-600 hover:bg-red-50" onClick={() => handleDeleteTable()}>
+                Delete Table
+              </Button>
+              <Button className="flex-1" onClick={handleEditTable} disabled={!editTableForm.tableNumber.trim()}>
+                Save Table Changes
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -730,6 +794,28 @@ export default function RestaurantManagement() {
                   {sessionLoading ? 'Saving...' : 'Update Table Details'}
                 </Button>
               </div>
+
+              {mergeCandidates.length > 0 && (
+                <div className="space-y-3 rounded-lg border p-3">
+                  <h3 className="font-semibold text-sm flex items-center gap-2"><PlusCircle className="h-4 w-4 text-blue-500" />Merge Another Table</h3>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Source Table</Label>
+                    <Select value={mergeSourceTableId} onValueChange={setMergeSourceTableId}>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Choose occupied table" /></SelectTrigger>
+                      <SelectContent>
+                        {mergeCandidates.map((table) => (
+                          <SelectItem key={table._id} value={table._id}>
+                            {table.tableNumber} · {table.partyName || 'Guest'} · {table.partySize || 1} pax
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button className="w-full" onClick={handleMergeTable} disabled={!mergeSourceTableId || mergeLoading}>
+                    {mergeLoading ? 'Merging...' : 'Merge Into This Table'}
+                  </Button>
+                </div>
+              )}
 
               {/* Add items to order */}
               <div className="space-y-2">

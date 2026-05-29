@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
-import { WeddingQuotation, WeddingHall, WeddingMenuPackage } from '@/lib/models/WeddingHall';
+import { WeddingQuotation, WeddingHall, WeddingMenuPackage, WeddingSupplierPackage } from '@/lib/models/WeddingHall';
 
 function generateQuoteNumber() {
   return `WQ-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
@@ -47,6 +47,8 @@ export async function GET(request: NextRequest) {
     let q = WeddingQuotation.find(query)
       .populate('hallId', 'name capacity basePrice hallType features')
       .populate('menuPackageId', 'name pricePerHead items description')
+      .populate('supplierId', 'name contactPerson email phone')
+      .populate('supplierPackageId', 'packageType packageName price description supplierId')
       .sort(upcoming === 'true' ? { eventDate: 1 } : { createdAt: -1 });
 
     if (limit > 0) q = q.limit(limit);
@@ -74,6 +76,8 @@ export async function POST(request: NextRequest) {
       eventType,
       pax,
       menuPackageId,
+      supplierId,
+      supplierPackageId,
       customMenuItems,
       addOns,
       additionalItems,
@@ -100,6 +104,11 @@ export async function POST(request: NextRequest) {
     }
 
     const addOnsAmount = (addOns || []).reduce((s: number, a: any) => s + (a.price || 0), 0);
+    let supplierPackageAmount = 0;
+    if (supplierPackageId) {
+      const supplierPkg = await WeddingSupplierPackage.findById(supplierPackageId).lean() as any;
+      supplierPackageAmount = supplierPkg?.price || 0;
+    }
     const additionalAmount = (additionalItems || []).reduce(
       (s: number, i: any) => s + (i.unitPrice || 0) * (i.quantity || 1),
       0
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
       total: i.unitPrice * i.quantity,
     }));
 
-    const totalAmount = baseAmount + menuAmount + addOnsAmount + additionalAmount;
+    const totalAmount = baseAmount + menuAmount + supplierPackageAmount + addOnsAmount + additionalAmount;
 
     const quotationDate = new Date();
     const validUntil = new Date(quotationDate);
@@ -127,9 +136,12 @@ export async function POST(request: NextRequest) {
       eventType: eventType || 'wedding',
       pax,
       menuPackageId: menuPackageId || undefined,
+      supplierId: supplierId || undefined,
+      supplierPackageId: supplierPackageId || undefined,
       customMenuItems: customMenuItems || [],
       addOns: addOns || [],
       additionalItems: resolvedAdditional,
+      supplierPackageAmount,
       baseAmount,
       menuAmount,
       addOnsAmount,
@@ -146,7 +158,9 @@ export async function POST(request: NextRequest) {
     await quotation.save();
     const populated = await WeddingQuotation.findById(quotation._id)
       .populate('hallId', 'name capacity basePrice')
-      .populate('menuPackageId', 'name pricePerHead');
+      .populate('menuPackageId', 'name pricePerHead')
+      .populate('supplierId', 'name contactPerson email phone')
+      .populate('supplierPackageId', 'packageType packageName price description supplierId');
 
     return NextResponse.json({ success: true, data: populated }, { status: 201 });
   } catch (e: any) {

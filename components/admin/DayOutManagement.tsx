@@ -844,7 +844,9 @@ export default function DayOutManagement() {
                 </div>
               </div>
               <div className="space-y-2"><Label>Notes</Label><Input value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="e.g. advance payment" /></div>
-              <Button className="w-full" onClick={handlePayment} disabled={!payAmount || parseFloat(payAmount) <= 0}>
+              <Button className="w-full" onClick={handlePayment} disabled={
+                payAmount === '' || (payAction === 'pay' && parseFloat(payAmount) <= 0)
+              }>
                 {payAction === 'close' ? 'Close & Settle' : 'Record Payment'}
               </Button>
             </div>

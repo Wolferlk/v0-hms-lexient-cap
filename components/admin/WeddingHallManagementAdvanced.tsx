@@ -49,6 +49,32 @@ interface MenuPackage {
   description: string;
 }
 
+interface Supplier {
+  _id: string;
+  name: string;
+  contactPerson: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  paymentTerms: string;
+  taxId?: string;
+  rating: number;
+  isActive: boolean;
+}
+
+interface SupplierPackage {
+  _id: string;
+  supplierId: string;
+  packageType: 'dj' | 'decoration' | 'traditional_dancing' | 'photography' | 'videography' | 'other' | 'wedding_car';
+  packageName: string;
+  description: string;
+  price: number;
+  isActive: boolean;
+}
+
 interface AddOn {
   type: string;
   description: string;
@@ -90,6 +116,9 @@ interface Quotation {
   payments: { amount: number; method: string; date: string; notes?: string }[];
   hallId?: { _id: string; name: string; capacity: number; basePrice: number; hallType: string };
   menuPackageId?: { _id: string; name: string; pricePerHead: number; items: string[] };
+  supplierId?: { _id: string; name: string; contactPerson: string; email: string; phone: string };
+  supplierPackageId?: { _id: string; packageType: string; packageName: string; price: number; description: string; supplierId: string };
+  supplierPackageAmount?: number;
 }
 
 // ── Hall Types ───────────────────────────────────────────────────────────────
@@ -284,6 +313,8 @@ export default function WeddingHallManagementAdvanced() {
   const [activeTab, setActiveTab] = useState('quotations');
   const [halls, setHalls] = useState<WeddingHall[]>([]);
   const [menuPackages, setMenuPackages] = useState<MenuPackage[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierPackages, setSupplierPackages] = useState<SupplierPackage[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -307,6 +338,8 @@ export default function WeddingHallManagementAdvanced() {
     eventType: 'wedding',
     pax: 100,
     menuPackageId: '',
+    supplierId: '',
+    supplierPackageId: '',
     customMenuItems: [] as string[],
     addOns: [] as AddOn[],
     additionalItems: [] as AdditionalItem[],
@@ -332,13 +365,39 @@ export default function WeddingHallManagementAdvanced() {
   const [editPkgDialog, setEditPkgDialog] = useState(false);
   const [editingPkg, setEditingPkg] = useState<MenuPackage | null>(null);
   const [pkgForm, setPkgForm] = useState({ name: '', description: '', pricePerHead: 0, items: [''] });
+  const [supplierDialog, setSupplierDialog] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [supplierForm, setSupplierForm] = useState({
+    name: '', contactPerson: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '', paymentTerms: 'COD', taxId: '', rating: 5,
+  });
+  const [supplierPackageDialog, setSupplierPackageDialog] = useState(false);
+  const [editingSupplierPackage, setEditingSupplierPackage] = useState<SupplierPackage | null>(null);
+  const [supplierPackageForm, setSupplierPackageForm] = useState({
+    supplierId: '', packageType: 'dj', packageName: '', description: '', price: 0,
+  });
 
   // Hall management
   const [hallDialog, setHallDialog] = useState(false);
   const [editingHall, setEditingHall] = useState<WeddingHall | null>(null);
-  const [hallForm, setHallForm] = useState({
+  const [hallForm, setHallForm] = useState<{
+    name: string;
+    hallType: 'premium' | 'standard' | 'basic' | 'indoor' | 'outdoor';
+    capacity: number;
+    area: number;
+    basePrice: number;
+    description: string;
+    availability: string;
+    features: {
+      airConditioned: boolean;
+      parking: boolean;
+      kitchenAccess: boolean;
+      danceFloor: boolean;
+      stage: boolean;
+      soundSystem: boolean;
+    };
+  }>({
     name: '',
-    hallType: 'standard' as const,
+    hallType: 'standard',
     capacity: 100,
     area: 1000,
     basePrice: 500,
@@ -359,14 +418,24 @@ export default function WeddingHallManagementAdvanced() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [hallsRes, pkgsRes, quotesRes] = await Promise.all([
+      const [hallsRes, pkgsRes, suppliersRes, supplierPkgsRes, quotesRes] = await Promise.all([
         fetch('/api/wedding-hall/halls'),
         fetch('/api/wedding-hall/menu-packages'),
+        fetch('/api/inventory/suppliers?activeOnly=true&limit=100'),
+        fetch('/api/wedding-hall/supplier-packages?activeOnly=true'),
         fetch('/api/wedding-hall/quotations'),
       ]);
-      const [h, p, q] = await Promise.all([hallsRes.json(), pkgsRes.json(), quotesRes.json()]);
+      const [h, p, s, sp, q] = await Promise.all([
+        hallsRes.json(),
+        pkgsRes.json(),
+        suppliersRes.json(),
+        supplierPkgsRes.json(),
+        quotesRes.json(),
+      ]);
       if (h.success) setHalls(h.data?.data || h.data || []);
       if (p.success) setMenuPackages(p.data || []);
+      if (s.success) setSuppliers(s.data || []);
+      if (sp.success) setSupplierPackages(sp.data || []);
       if (q.success) setQuotations(q.data || []);
     } catch { toast.error('Failed to load data'); } finally { setLoading(false); }
   }, []);
@@ -379,11 +448,13 @@ export default function WeddingHallManagementAdvanced() {
     const hall = halls.find(h => h._id === form.hallId);
     const base = hall?.basePrice || 0;
     const pkg = menuPackages.find(p => p._id === form.menuPackageId);
+    const supplierPkg = supplierPackages.find(p => p._id === form.supplierPackageId);
     const menu = pkg ? pkg.pricePerHead * form.pax : 0;
+    const supplierPackageAmount = supplierPkg ? supplierPkg.price : 0;
     const addOnsTotal = form.addOns.reduce((s, a) => s + a.price, 0);
     const additionalTotal = form.additionalItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-    return { base, menu, addOnsTotal, additionalTotal, grand: base + menu + addOnsTotal + additionalTotal };
-  }, [form, halls, menuPackages]);
+    return { base, menu, supplierPackageAmount, addOnsTotal, additionalTotal, grand: base + menu + supplierPackageAmount + addOnsTotal + additionalTotal };
+  }, [form, halls, menuPackages, supplierPackages]);
 
   const createQuotation = async () => {
     try {
@@ -397,7 +468,7 @@ export default function WeddingHallManagementAdvanced() {
         setCreateDialog(false); setStep(1);
         setForm({
           hallId: '', clientName: '', clientEmail: '', clientPhone: '', eventDate: '', eventStartTime: '18:00',
-          eventEndTime: '23:00', eventType: 'wedding', pax: 100, menuPackageId: '', customMenuItems: [], addOns: [],
+          eventEndTime: '23:00', eventType: 'wedding', pax: 100, menuPackageId: '', supplierId: '', supplierPackageId: '', customMenuItems: [], addOns: [],
           additionalItems: [], notes: ''
         });
         fetchAll();
@@ -512,6 +583,60 @@ export default function WeddingHallManagementAdvanced() {
     else { toast.error(data.error); }
   };
 
+  const saveSupplier = async () => {
+    const method = editingSupplier ? 'PUT' : 'POST';
+    const body = editingSupplier ? { id: editingSupplier._id, ...supplierForm } : supplierForm;
+    const res = await fetch('/api/inventory/suppliers', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast.success(editingSupplier ? 'Supplier updated' : 'Supplier added');
+      setSupplierDialog(false);
+      setEditingSupplier(null);
+      setSupplierForm({ name: '', contactPerson: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '', paymentTerms: 'COD', taxId: '', rating: 5 });
+      fetchAll();
+    } else {
+      toast.error(data.error);
+    }
+  };
+
+  const deleteSupplier = async (id: string) => {
+    const res = await fetch(`/api/inventory/suppliers?id=${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { toast.success('Supplier deleted'); fetchAll(); }
+    else { toast.error(data.error); }
+  };
+
+  const saveSupplierPackage = async () => {
+    const method = editingSupplierPackage ? 'PUT' : 'POST';
+    const body = editingSupplierPackage ? { id: editingSupplierPackage._id, ...supplierPackageForm } : supplierPackageForm;
+    const res = await fetch('/api/wedding-hall/supplier-packages', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast.success(editingSupplierPackage ? 'Supplier package updated' : 'Supplier package added');
+      setSupplierPackageDialog(false);
+      setEditingSupplierPackage(null);
+      setSupplierPackageForm({ supplierId: '', packageType: 'dj', packageName: '', description: '', price: 0 });
+      fetchAll();
+    } else {
+      toast.error(data.error);
+    }
+  };
+
+  const deleteSupplierPackage = async (id: string) => {
+    const res = await fetch(`/api/wedding-hall/supplier-packages?id=${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { toast.success('Supplier package deleted'); fetchAll(); }
+    else { toast.error(data.error); }
+  };
+
   // ── Hall management ──────────────────────────────────────────────────────
 
   const saveHall = async () => {
@@ -557,6 +682,7 @@ export default function WeddingHallManagementAdvanced() {
           <TabsTrigger value="quotations"><Heart className="mr-1.5 h-3.5 w-3.5" />Quotations</TabsTrigger>
           <TabsTrigger value="halls">Wedding Halls</TabsTrigger>
           <TabsTrigger value="menus">Menu Packages (5)</TabsTrigger>
+          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
         </TabsList>
 
         {/* ══ QUOTATIONS ═══════════════════════════════════════════════════ */}
@@ -776,6 +902,126 @@ export default function WeddingHallManagementAdvanced() {
             ))}
           </div>
         </TabsContent>
+        {/* ══ SUPPLIERS ═══════════════════════════════════════════════════ */}
+        <TabsContent value="suppliers" className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded p-3">
+              🧾 Manage wedding suppliers and supplier packages available for quotations.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => {
+                setEditingSupplier(null);
+                setSupplierForm({ name: '', contactPerson: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '', paymentTerms: 'COD', taxId: '', rating: 5 });
+                setSupplierDialog(true);
+              }}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />Add Supplier
+              </Button>
+              <Button size="sm" onClick={() => {
+                setEditingSupplierPackage(null);
+                setSupplierPackageForm({ supplierId: '', packageType: 'dj', packageName: '', description: '', price: 0 });
+                setSupplierPackageDialog(true);
+              }}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />Add Package
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border p-4 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold">Suppliers</h3>
+                  <p className="text-xs text-muted-foreground">Add/edit wedding vendor details and contact information.</p>
+                </div>
+                <span className="text-xs text-muted-foreground">{suppliers.length} suppliers</span>
+              </div>
+              {suppliers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No suppliers added yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {suppliers.map(s => (
+                    <div key={s._id} className="rounded-lg border p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">{s.contactPerson} · {s.phone} · {s.email}</p>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+                          setEditingSupplier(s);
+                          setSupplierForm({
+                            name: s.name,
+                            contactPerson: s.contactPerson,
+                            email: s.email,
+                            phone: s.phone,
+                            address: s.address,
+                            city: s.city,
+                            state: s.state,
+                            zipCode: s.zipCode,
+                            paymentTerms: s.paymentTerms,
+                            taxId: s.taxId || '',
+                            rating: s.rating,
+                          });
+                          setSupplierDialog(true);
+                        }}>
+                          <Edit className="h-3 w-3 mr-1" />Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-8 text-xs text-red-600" onClick={() => deleteSupplier(s._id)}>
+                          <Trash2 className="h-3 w-3 mr-1" />Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold">Supplier Packages</h3>
+                  <p className="text-xs text-muted-foreground">Create packages for DJ, decor, photography, car rental, and more.</p>
+                </div>
+                <span className="text-xs text-muted-foreground">{supplierPackages.length} packages</span>
+              </div>
+              {supplierPackages.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No package definitions yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {supplierPackages.map(pkg => {
+                    const supplier = suppliers.find(s => s._id === pkg.supplierId);
+                    return (
+                      <div key={pkg._id} className="rounded-lg border p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-medium">{pkg.packageName}</p>
+                          <p className="text-xs text-muted-foreground">{pkg.packageType.replace('_', ' ')} · {supplier?.name || 'Unknown supplier'}</p>
+                          <p className="text-xs text-muted-foreground">${pkg.price.toFixed(2)} · {pkg.description}</p>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+                            setEditingSupplierPackage(pkg);
+                            setSupplierPackageForm({
+                              supplierId: pkg.supplierId,
+                              packageType: pkg.packageType,
+                              packageName: pkg.packageName,
+                              description: pkg.description,
+                              price: pkg.price,
+                            });
+                            setSupplierPackageDialog(true);
+                          }}>
+                            <Edit className="h-3 w-3 mr-1" />Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs text-red-600" onClick={() => deleteSupplierPackage(pkg._id)}>
+                            <Trash2 className="h-3 w-3 mr-1" />Delete
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* ══ CREATE QUOTATION DIALOG ════════════════════════════════════════ */}
@@ -899,6 +1145,55 @@ export default function WeddingHallManagementAdvanced() {
                   </div>
                 )}
 
+                  <div>
+                    <p className="text-sm font-semibold mb-3">🤝 Supplier & Package Selection</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Supplier</Label>
+                        <Select value={form.supplierId} onValueChange={v => {
+                          setForm(f => ({
+                            ...f,
+                            supplierId: v,
+                            supplierPackageId: supplierPackages.find(pkg => pkg._id === f.supplierPackageId && pkg.supplierId === v) ? f.supplierPackageId : '',
+                          }));
+                        }}>
+                          <SelectTrigger><SelectValue placeholder="Choose supplier..." /></SelectTrigger>
+                          <SelectContent>
+                            {suppliers.map(s => (
+                              <SelectItem key={s._id} value={s._id}>{s.name} · {s.contactPerson}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Supplier Package</Label>
+                        <Select value={form.supplierPackageId} onValueChange={v => {
+                          const pkg = supplierPackages.find(item => item._id === v);
+                          setForm(f => ({
+                            ...f,
+                            supplierPackageId: v,
+                            supplierId: pkg?.supplierId || f.supplierId,
+                          }));
+                        }}>
+                          <SelectTrigger><SelectValue placeholder="Choose package..." /></SelectTrigger>
+                          <SelectContent>
+                            {supplierPackages
+                              .filter(pkg => !form.supplierId || pkg.supplierId === form.supplierId)
+                              .map(pkg => (
+                                <SelectItem key={pkg._id} value={pkg._id}>{pkg.packageName} · ${pkg.price}</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {form.supplierPackageId && (
+                      <div className="rounded-lg bg-muted/40 p-3 mt-3 text-sm">
+                        <p className="font-medium">{supplierPackages.find(pkg => pkg._id === form.supplierPackageId)?.packageName}</p>
+                        <p className="text-xs text-muted-foreground">{supplierPackages.find(pkg => pkg._id === form.supplierPackageId)?.description}</p>
+                      </div>
+                    )}
+                  </div>
+
                 <div className="flex gap-2">
                   <Button className="flex-1" onClick={() => setStep(4)}>Next: Review & Confirm →</Button>
                   <Button variant="ghost" className="flex-1" onClick={() => setStep(2)}>← Back</Button>
@@ -912,6 +1207,7 @@ export default function WeddingHallManagementAdvanced() {
                 <div className="rounded-lg bg-muted/40 p-4 space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-muted-foreground">Hall Base Charge</span><span>${totals.base.toFixed(2)}</span></div>
                   {totals.menu > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Menu ({form.pax} pax)</span><span>${totals.menu.toFixed(2)}</span></div>}
+                    {totals.supplierPackageAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Supplier Package</span><span>${totals.supplierPackageAmount.toFixed(2)}</span></div>}
                   {totals.addOnsTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Add-ons & Services</span><span>${totals.addOnsTotal.toFixed(2)}</span></div>}
                   <div className="flex justify-between font-bold text-base border-t pt-2"><span>GRAND TOTAL</span><span>${totals.grand.toFixed(2)}</span></div>
                   <p className="text-xs text-muted-foreground mt-2 p-2 bg-blue-50 rounded border border-blue-200">
@@ -1031,6 +1327,78 @@ export default function WeddingHallManagementAdvanced() {
         </DialogContent>
       </Dialog>
 
+      {/* ══ SUPPLIER DIALOG ─────────────────────────────────────────────── */}
+      <Dialog open={supplierDialog} onOpenChange={(open) => {
+        if (!open) {
+          setEditingSupplier(null);
+          setSupplierForm({ name: '', contactPerson: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '', paymentTerms: 'COD', taxId: '', rating: 5 });
+        }
+        setSupplierDialog(open);
+      }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingSupplier ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-2"><Label>Supplier Name *</Label><Input value={supplierForm.name} onChange={e => setSupplierForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label>Contact Person *</Label><Input value={supplierForm.contactPerson} onChange={e => setSupplierForm(f => ({ ...f, contactPerson: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Email *</Label><Input type="email" value={supplierForm.email} onChange={e => setSupplierForm(f => ({ ...f, email: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label>Phone *</Label><Input value={supplierForm.phone} onChange={e => setSupplierForm(f => ({ ...f, phone: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Payment Terms</Label><Input value={supplierForm.paymentTerms} onChange={e => setSupplierForm(f => ({ ...f, paymentTerms: e.target.value }))} placeholder="COD, Net 30" /></div>
+            </div>
+            <div className="space-y-2"><Label>Address *</Label><Input value={supplierForm.address} onChange={e => setSupplierForm(f => ({ ...f, address: e.target.value }))} /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2"><Label>City</Label><Input value={supplierForm.city} onChange={e => setSupplierForm(f => ({ ...f, city: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>State</Label><Input value={supplierForm.state} onChange={e => setSupplierForm(f => ({ ...f, state: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Zip Code</Label><Input value={supplierForm.zipCode} onChange={e => setSupplierForm(f => ({ ...f, zipCode: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label>Tax ID</Label><Input value={supplierForm.taxId} onChange={e => setSupplierForm(f => ({ ...f, taxId: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Rating</Label><Input type="number" min={1} max={5} value={supplierForm.rating} onChange={e => setSupplierForm(f => ({ ...f, rating: parseInt(e.target.value) || 1 }))} /></div>
+            </div>
+            <Button className="w-full" onClick={saveSupplier} disabled={!supplierForm.name.trim() || !supplierForm.contactPerson.trim() || !supplierForm.email.trim() || !supplierForm.phone.trim() || !supplierForm.address.trim()}>💾 Save Supplier</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══ SUPPLIER PACKAGE DIALOG ─────────────────────────────────────── */}
+      <Dialog open={supplierPackageDialog} onOpenChange={(open) => {
+        if (!open) {
+          setEditingSupplierPackage(null);
+          setSupplierPackageForm({ supplierId: '', packageType: 'dj', packageName: '', description: '', price: 0 });
+        }
+        setSupplierPackageDialog(open);
+      }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingSupplierPackage ? 'Edit Supplier Package' : 'Add Supplier Package'}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-2"><Label>Supplier *</Label>
+              <Select value={supplierPackageForm.supplierId} onValueChange={v => setSupplierPackageForm(f => ({ ...f, supplierId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Choose supplier..." /></SelectTrigger>
+                <SelectContent>
+                  {suppliers.map(s => <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Package Type *</Label>
+              <Select value={supplierPackageForm.packageType} onValueChange={v => setSupplierPackageForm(f => ({ ...f, packageType: v as any }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['dj','decoration','traditional_dancing','photography','videography','other','wedding_car'].map(type => (
+                    <SelectItem key={type} value={type}>{type.replace('_', ' ')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Package Name *</Label><Input value={supplierPackageForm.packageName} onChange={e => setSupplierPackageForm(f => ({ ...f, packageName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Price ($)</Label><Input type="number" min={0} value={supplierPackageForm.price} onChange={e => setSupplierPackageForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} /></div>
+            <div className="space-y-2"><Label>Description</Label><Input value={supplierPackageForm.description} onChange={e => setSupplierPackageForm(f => ({ ...f, description: e.target.value }))} /></div>
+            <Button className="w-full" onClick={saveSupplierPackage} disabled={!supplierPackageForm.supplierId || !supplierPackageForm.packageName.trim() || supplierPackageForm.price < 0}>💾 Save Package</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ══ HALL DIALOG ══════════════════════════════════════════════════ */}
       <Dialog open={hallDialog} onOpenChange={setHallDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1145,6 +1513,14 @@ export default function WeddingHallManagementAdvanced() {
                 </div>
               )}
 
+              {selectedQ.supplierPackageId && (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                  <p className="font-semibold text-blue-700">🤝 Supplier Package: {selectedQ.supplierPackageId.packageName}</p>
+                  <p className="text-xs text-blue-600 mt-1">{selectedQ.supplierId?.name || 'Supplier'} · ${selectedQ.supplierPackageId.price.toFixed(2)}</p>
+                  {selectedQ.supplierPackageId.description && <p className="text-xs text-muted-foreground mt-1">{selectedQ.supplierPackageId.description}</p>}
+                </div>
+              )}
+
               {selectedQ.addOns.length > 0 && (
                 <div>
                   <p className="font-semibold mb-2">🎉 Services & Add-ons</p>
@@ -1175,10 +1551,10 @@ export default function WeddingHallManagementAdvanced() {
                       <div key={idx} className={`border rounded p-2 ${editingItemIndex === idx ? 'bg-blue-50' : 'bg-muted/30'}`}>
                         {editItemsMode && editingItemIndex === idx ? (
                           <div className="space-y-2">
-                            <Input size="small" value={i.name} className="h-7 text-xs" onChange={e => { }} placeholder="Item name" />
+                            <Input value={i.name} className="h-7 text-xs" onChange={e => { }} placeholder="Item name" />
                             <div className="grid grid-cols-3 gap-2">
-                              <Input size="small" type="number" value={i.quantity} className="h-7 text-xs" onChange={e => { }} placeholder="Qty" />
-                              <Input size="small" type="number" value={i.unitPrice} className="h-7 text-xs" onChange={e => { }} placeholder="Price" />
+                              <Input type="number" value={i.quantity} className="h-7 text-xs" onChange={e => { }} placeholder="Qty" />
+                              <Input type="number" value={i.unitPrice} className="h-7 text-xs" onChange={e => { }} placeholder="Price" />
                               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleDeleteItem(idx)}>Delete</Button>
                             </div>
                           </div>

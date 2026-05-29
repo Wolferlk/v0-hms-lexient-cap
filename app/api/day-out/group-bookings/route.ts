@@ -156,6 +156,7 @@ export async function PUT(request: NextRequest) {
       }
       booking.updatedAt = new Date();
       await booking.save();
+      await booking.populate('packageId').populate('customerId');
       return NextResponse.json({ success: true, data: booking });
     }
 
@@ -176,6 +177,7 @@ export async function PUT(request: NextRequest) {
       booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
       booking.updatedAt = new Date();
       await booking.save();
+      await booking.populate('packageId').populate('customerId');
       return NextResponse.json({ success: true, data: booking });
     }
 
@@ -195,6 +197,7 @@ export async function PUT(request: NextRequest) {
       booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
       booking.updatedAt = new Date();
       await booking.save();
+      await booking.populate('packageId').populate('customerId');
       return NextResponse.json({ success: true, data: booking });
     }
 
@@ -208,12 +211,17 @@ export async function PUT(request: NextRequest) {
       booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
       booking.updatedAt = new Date();
       await booking.save();
+      await booking.populate('packageId').populate('customerId');
       return NextResponse.json({ success: true, data: booking });
     }
 
     if (action === 'close') {
       if (booking.status !== 'confirmed') {
         return NextResponse.json({ success: false, error: 'Only confirmed bookings can be closed' }, { status: 400 });
+      }
+      const due = Math.max(0, booking.totalAmount - booking.advancePaid);
+      if (due > 0 && (!amount || amount < due)) {
+        return NextResponse.json({ success: false, error: 'Closing requires full settlement of the remaining balance' }, { status: 400 });
       }
       if (amount && amount > 0) {
         booking.payments.push({ amount, method: method || 'cash', date: new Date(), notes: notes || '' });
@@ -224,6 +232,7 @@ export async function PUT(request: NextRequest) {
       booking.status = 'completed';
       booking.updatedAt = new Date();
       await booking.save();
+      await booking.populate('packageId').populate('customerId');
       return NextResponse.json({ success: true, data: booking });
     }
 
@@ -231,6 +240,7 @@ export async function PUT(request: NextRequest) {
       booking.status = 'cancelled';
       booking.updatedAt = new Date();
       await booking.save();
+      await booking.populate('packageId').populate('customerId');
       return NextResponse.json({ success: true, data: booking });
     }
 
@@ -246,6 +256,8 @@ export async function PUT(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    await updated.populate('packageId').populate('customerId');
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {

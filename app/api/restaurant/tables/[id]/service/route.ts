@@ -113,6 +113,79 @@ export async function POST(req: NextRequest, { params }: Params) {
       table.partySize = partySize;
       await table.save();
 
+
+    // ── MERGE TABLES ─────────────────────────────────────────────────────────
+    if (action === 'merge') {
+      const { sourceTableId } = body;
+      if (!sourceTableId || !ObjectId.isValid(sourceTableId)) {
+        return NextResponse.json({ success: false, error: 'Valid sourceTableId required' }, { status: 400 });
+      }
+      if (!table.currentOrderId) {
+        return NextResponse.json({ success: false, error: 'Target table has no active order' }, { status: 400 });
+      }
+      if (sourceTableId === id) {
+        return NextResponse.json({ success: false, error: 'Cannot merge table into itself' }, { status: 400 });
+      }
+
+      const sourceTable = await Table.findById(sourceTableId);
+      if (!sourceTable) return NextResponse.json({ success: false, error: 'Source table not found' }, { status: 404 });
+      if (sourceTable.status !== 'occupied' || !sourceTable.currentOrderId) {
+        return NextResponse.json({ success: false, error: 'Source table must be occupied with an active order' }, { status: 400 });
+      }
+
+      const targetOrder = await Order.findById(table.currentOrderId);
+      const sourceOrder = await Order.findById(sourceTable.currentOrderId);
+      if (!targetOrder || !sourceOrder) return NextResponse.json({ success: false, error: 'Order not found for one of the tables' }, { status: 404 });
+
+      // Combine party names and sizes
+      const mergedPartyName = [table.partyName, sourceTable.partyName].filter(Boolean).join(' + ') || targetOrder.partyName;
+      const mergedPartySize = (table.partySize || 0) + (sourceTable.partySize || 0);
+      table.partyName = mergedPartyName;
+      table.partySize = mergedPartySize;
+      targetOrder.partyName = mergedPartyName;
+
+      for (const item of sourceOrder.items) {
+        const existing = targetOrder.items.find(
+          (i: any) => i.menuItemId.toString() === item.menuItemId.toString()
+        );
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          targetOrder.items.push({
+            menuItemId: item.menuItemId,
+            itemName: item.itemName,
+            quantity: item.quantity,
+            specialInstructions: item.specialInstructions || '',
+            price: item.price,
+          });
+        }
+      }
+
+      const subtotal = targetOrder.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+      const tax = parseFloat((subtotal * 0.05).toFixed(2));
+      targetOrder.subtotal = subtotal;
+      targetOrder.tax = tax;
+      targetOrder.total = parseFloat((subtotal + tax - (targetOrder.discount || 0)).toFixed(2));
+      targetOrder.updatedAt = new Date();
+      await targetOrder.save();
+
+      sourceTable.status = 'available';
+      sourceTable.partyName = '';
+      sourceTable.partySize = 0;
+      sourceTable.openedAt = undefined;
+      sourceTable.currentOrderId = undefined;
+      sourceTable.currentBillId = undefined;
+      await sourceTable.save();
+
+      // Mark source order cancelled so it doesn't remain active
+      sourceOrder.status = 'cancelled';
+      sourceOrder.paymentStatus = 'unpaid';
+      await sourceOrder.save();
+
+      await table.save();
+
+      return NextResponse.json({ success: true, data: { table, order: targetOrder } });
+    }
       if (table.currentOrderId) {
         await Order.findByIdAndUpdate(table.currentOrderId, { partyName, updatedAt: new Date() });
       }

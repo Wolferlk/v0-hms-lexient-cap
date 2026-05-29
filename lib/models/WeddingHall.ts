@@ -64,6 +64,17 @@ export interface IWeddingMenuPackage extends Document {
   updatedAt: Date;
 }
 
+export interface IWeddingSupplierPackage extends Document {
+  supplierId: mongoose.Types.ObjectId;
+  packageType: 'dj' | 'decoration' | 'traditional_dancing' | 'photography' | 'videography' | 'other' | 'wedding_car';
+  packageName: string;
+  description: string;
+  price: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface IWeddingQuotation extends Document {
   quoteNumber: string;
   hallId: mongoose.Types.ObjectId;
@@ -76,6 +87,8 @@ export interface IWeddingQuotation extends Document {
   eventType: 'wedding' | 'reception' | 'pre_wedding' | 'birthday' | 'corporate' | 'other';
   pax: number;
   menuPackageId?: mongoose.Types.ObjectId;
+  supplierId?: mongoose.Types.ObjectId;
+  supplierPackageId?: mongoose.Types.ObjectId;
   customMenuItems: string[];
   addOns: {
     type: 'dj' | 'decoration' | 'traditional_dancing' | 'photography' | 'videography' | 'other';
@@ -88,6 +101,7 @@ export interface IWeddingQuotation extends Document {
     unitPrice: number;
     total: number;
   }[];
+  supplierPackageAmount?: number;
   baseAmount: number;
   menuAmount: number;
   addOnsAmount: number;
@@ -247,9 +261,12 @@ const weddingQuotationSchema = new Schema<IWeddingQuotation>(
     },
     pax: { type: Number, required: true, min: 1 },
     menuPackageId: { type: mongoose.Schema.Types.ObjectId, ref: 'WeddingMenuPackage' },
+    supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier' },
+    supplierPackageId: { type: mongoose.Schema.Types.ObjectId, ref: 'WeddingSupplierPackage' },
     customMenuItems: [{ type: String }],
     addOns: [addOnSchema],
     additionalItems: [additionalItemSchema],
+    supplierPackageAmount: { type: Number, default: 0 },
     baseAmount: { type: Number, default: 0 },
     menuAmount: { type: Number, default: 0 },
     addOnsAmount: { type: Number, default: 0 },
@@ -289,6 +306,24 @@ export const WeddingPackage =
 export const WeddingMenuPackage =
   mongoose.models.WeddingMenuPackage ||
   mongoose.model<IWeddingMenuPackage>('WeddingMenuPackage', weddingMenuPackageSchema);
+
+export const WeddingSupplierPackage =
+  mongoose.models.WeddingSupplierPackage ||
+  mongoose.model<IWeddingSupplierPackage>('WeddingSupplierPackage', new Schema<IWeddingSupplierPackage>(
+    {
+      supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },
+      packageType: {
+        type: String,
+        enum: ['dj', 'decoration', 'traditional_dancing', 'photography', 'videography', 'other', 'wedding_car'],
+        required: true,
+      },
+      packageName: { type: String, required: true },
+      description: { type: String, default: '' },
+      price: { type: Number, required: true, min: 0 },
+      isActive: { type: Boolean, default: true },
+    },
+    { timestamps: true }
+  ));
 
 export const WeddingQuotation =
   mongoose.models.WeddingQuotation ||

@@ -841,12 +841,12 @@ export default function BookingManagement() {
                     </div>
                   )}
 
-                  {/* Payment summary */}
+                  {/* Payment summary — room charges only; see Invoice tab for full grand total */}
                   <div className="rounded-lg border p-3 space-y-1 text-sm">
                     <div className="flex justify-between"><span>Room Total</span><span>${selectedBooking.totalAmount.toFixed(2)}</span></div>
                     {(selectedBooking.discountAmount||0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-${selectedBooking.discountAmount.toFixed(2)}</span></div>}
                     {(selectedBooking.amountPaid||0) > 0 && <div className="flex justify-between text-blue-600"><span>Amount Paid</span><span>${selectedBooking.amountPaid.toFixed(2)}</span></div>}
-                    <div className="flex justify-between font-bold border-t pt-1"><span>Net Due</span><span>${(selectedBooking.totalAmount-(selectedBooking.discountAmount||0)-(selectedBooking.amountPaid||0)).toFixed(2)}</span></div>
+                    <div className="flex justify-between font-bold border-t pt-1"><span>Room Balance</span><span>${(selectedBooking.totalAmount-(selectedBooking.discountAmount||0)-(selectedBooking.amountPaid||0)).toFixed(2)}</span></div>
                   </div>
 
                   {/* Payment history */}

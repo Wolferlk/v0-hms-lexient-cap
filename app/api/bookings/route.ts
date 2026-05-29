@@ -117,8 +117,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate number of nights
-    const numberOfNights = Math.ceil(
+    // Calculate number of nights (round handles DST boundary edge cases)
+    const numberOfNights = Math.round(
       (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)
     );
 

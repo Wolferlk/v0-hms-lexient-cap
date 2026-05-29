@@ -78,7 +78,7 @@ export default function BookingPage() {
   const calculateTotalPrice = () => {
     const checkIn = new Date(checkInDate);
     const checkOut = new Date(checkOutDate);
-    const nights = Math.ceil(
+    const nights = Math.round(
       (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)
     );
 

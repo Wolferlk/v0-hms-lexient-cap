@@ -30,7 +30,9 @@ export async function GET(
       status: { $ne: 'cancelled' },
     }).lean() as any[];
 
-    // Build room charge line items
+    // Build room charge line items using current room data for display.
+    // roomSubtotal is authoritative from booking.totalAmount (locked in at booking time)
+    // so the invoice always matches the checkout grand total.
     const roomCharges = rooms.map((room: any) => ({
       description: `Room ${room.roomNumber} (${room.category}) × ${booking.numberOfNights} night(s)`,
       unitPrice: room.pricePerNight,
@@ -38,7 +40,7 @@ export async function GET(
       total: room.pricePerNight * booking.numberOfNights,
     }));
 
-    const roomSubtotal = roomCharges.reduce((s: number, r: any) => s + r.total, 0);
+    const roomSubtotal = booking.totalAmount || 0;
     const discount = booking.discountAmount || 0;
     const roomTotal = roomSubtotal - discount;
 

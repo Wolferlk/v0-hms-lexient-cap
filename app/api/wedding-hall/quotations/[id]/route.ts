@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
-import { WeddingQuotation, WeddingMenuPackage } from '@/lib/models/WeddingHall';
+import { WeddingQuotation, WeddingMenuPackage, WeddingSupplierPackage } from '@/lib/models/WeddingHall';
 import { ObjectId } from 'mongodb';
 
 type Params = { params: Promise<{ id: string }> };
@@ -14,7 +14,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     const q = await WeddingQuotation.findById(id)
       .populate('hallId', 'name capacity basePrice area amenities')
-      .populate('menuPackageId', 'name pricePerHead items description');
+      .populate('menuPackageId', 'name pricePerHead items description')
+      .populate('supplierId', 'name contactPerson email phone')
+      .populate('supplierPackageId', 'packageType packageName price description supplierId');
 
     if (!q) return NextResponse.json({ success: false, error: 'Quotation not found' }, { status: 404 });
 
@@ -191,16 +193,21 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
 
     // ── GENERAL UPDATE ───────────────────────────────────────────────────────
-    const { menuPackageId } = body;
+    const { menuPackageId, supplierPackageId } = body;
     let menuAmount = quotation.menuAmount;
+    let supplierPackageAmount = quotation.supplierPackageAmount || 0;
     if (menuPackageId) {
       const pkg = await WeddingMenuPackage.findById(menuPackageId).lean() as any;
       if (pkg) menuAmount = pkg.pricePerHead * (body.pax || quotation.pax);
     }
+    if (supplierPackageId) {
+      const supplierPkg = await WeddingSupplierPackage.findById(supplierPackageId).lean() as any;
+      supplierPackageAmount = supplierPkg?.price || 0;
+    }
 
     const updated = await WeddingQuotation.findByIdAndUpdate(
       id,
-      { ...body, menuAmount, totalAmount: quotation.baseAmount + menuAmount + quotation.addOnsAmount + quotation.additionalAmount },
+      { ...body, menuAmount, supplierPackageAmount, totalAmount: quotation.baseAmount + menuAmount + supplierPackageAmount + quotation.addOnsAmount + quotation.additionalAmount },
       { new: true, runValidators: true }
     )
       .populate('hallId', 'name capacity basePrice hallType features')
