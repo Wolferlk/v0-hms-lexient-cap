@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Edit2, Trash2, Plus } from 'lucide-react';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface Room {
   _id: string;
@@ -27,6 +28,7 @@ interface Room {
 }
 
 export default function RoomManagement() {
+  const { dual: fxDual } = useCurrency();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -310,7 +312,7 @@ export default function RoomManagement() {
                   <div className="flex-1">
                     <h4 className="font-semibold">Room {room.roomNumber}</h4>
                     <p className="text-sm text-muted-foreground">
-                      {room.category} • {room.capacity} guests • ${room.pricePerNight}/night
+                      {room.category} • {room.capacity} guests • {fxDual(room.pricePerNight)}/night
                     </p>
                     {room.amenities.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">

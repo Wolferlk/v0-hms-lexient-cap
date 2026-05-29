@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { WeddingQuotation, WeddingHall, WeddingMenuPackage, WeddingSupplierPackage } from '@/lib/models/WeddingHall';
+import '@/lib/models/Inventory';
+import { ObjectId } from 'mongodb';
 
 function generateQuoteNumber() {
   return `WQ-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+}
+
+function populateQuotationRelations(query: any) {
+  query
+    .populate('hallId', 'name capacity basePrice hallType features')
+    .populate('menuPackageId', 'name pricePerHead items description');
+
+  if (WeddingQuotation.schema.path('supplierId')) {
+    query.populate('supplierId', 'name contactPerson email phone');
+  }
+
+  if (WeddingQuotation.schema.path('supplierPackageId')) {
+    query.populate('supplierPackageId', 'packageType packageName price description supplierId');
+  }
+
+  return query;
 }
 
 export async function GET(request: NextRequest) {
@@ -44,11 +62,7 @@ export async function GET(request: NextRequest) {
       { $set: { status: 'expired' } }
     );
 
-    let q = WeddingQuotation.find(query)
-      .populate('hallId', 'name capacity basePrice hallType features')
-      .populate('menuPackageId', 'name pricePerHead items description')
-      .populate('supplierId', 'name contactPerson email phone')
-      .populate('supplierPackageId', 'packageType packageName price description supplierId')
+    let q = populateQuotationRelations(WeddingQuotation.find(query))
       .sort(upcoming === 'true' ? { eventDate: 1 } : { createdAt: -1 });
 
     if (limit > 0) q = q.limit(limit);
@@ -87,6 +101,18 @@ export async function POST(request: NextRequest) {
     if (!hallId || !clientName || !clientEmail || !clientPhone || !eventDate || !pax) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !ObjectId.isValid(hallId) ||
+      (menuPackageId && !ObjectId.isValid(menuPackageId)) ||
+      (supplierId && !ObjectId.isValid(supplierId)) ||
+      (supplierPackageId && !ObjectId.isValid(supplierPackageId))
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid hall, menu package, supplier, or supplier package ID' },
         { status: 400 }
       );
     }
@@ -156,11 +182,7 @@ export async function POST(request: NextRequest) {
     });
 
     await quotation.save();
-    const populated = await WeddingQuotation.findById(quotation._id)
-      .populate('hallId', 'name capacity basePrice')
-      .populate('menuPackageId', 'name pricePerHead')
-      .populate('supplierId', 'name contactPerson email phone')
-      .populate('supplierPackageId', 'packageType packageName price description supplierId');
+    const populated = await populateQuotationRelations(WeddingQuotation.findById(quotation._id));
 
     return NextResponse.json({ success: true, data: populated }, { status: 201 });
   } catch (e: any) {

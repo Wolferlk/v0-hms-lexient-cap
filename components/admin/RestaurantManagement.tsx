@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
   UtensilsCrossed,
   Plus,
@@ -153,6 +154,7 @@ function printBill(
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RestaurantManagement() {
+  const { dual: fxDual, toLKR } = useCurrency();
   const [activeTab, setActiveTab] = useState('tables');
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -589,7 +591,7 @@ export default function RestaurantManagement() {
                     <p className="font-semibold">{item.name}</p>
                     <p className="text-xs text-muted-foreground capitalize">{item.category}</p>
                   </div>
-                  <p className="font-bold">${item.price.toFixed(2)}</p>
+                  <p className="font-bold">{fxDual(item.price)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   {item.vegetarian && <span className="text-green-600 font-medium">🌿 Veg</span>}
@@ -771,9 +773,9 @@ export default function RestaurantManagement() {
                     </div>
                   ))}
                   <div className="rounded-lg bg-muted/40 p-3 space-y-1 text-sm">
-                    <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>${tableOrder.subtotal.toFixed(2)}</span></div>
-                    <div className="flex justify-between text-muted-foreground"><span>Tax (5%)</span><span>${tableOrder.tax.toFixed(2)}</span></div>
-                    <div className="flex justify-between font-bold text-base border-t pt-1"><span>Total</span><span>${tableOrder.total.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>{fxDual(tableOrder.subtotal)}</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Tax (5%)</span><span>{fxDual(tableOrder.tax)}</span></div>
+                    <div className="flex justify-between font-bold text-base border-t pt-1"><span>Total</span><span>{fxDual(tableOrder.total)}</span></div>
                   </div>
                 </div>
               )}
@@ -981,6 +983,7 @@ function LiveOrders() {
 }
 
 function BillHistory() {
+  const { dual: fxDual } = useCurrency();
   const [bills, setBills] = useState<RestaurantBill[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1026,15 +1029,15 @@ function BillHistory() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="font-bold">${bill.totalAmount.toFixed(2)}</p>
+                <p className="font-bold">{fxDual(bill.totalAmount)}</p>
                 <p className="text-xs text-green-600 uppercase">{bill.paymentStatus}</p>
               </div>
             </div>
 
             <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-              <p>Subtotal: ${bill.subtotal.toFixed(2)}</p>
-              <p>Tax: ${bill.tax.toFixed(2)}</p>
-              <p>Discount: ${bill.discount.toFixed(2)}</p>
+              <p>Subtotal: {fxDual(bill.subtotal)}</p>
+              <p>Tax: {fxDual(bill.tax)}</p>
+              <p>Discount: {fxDual(bill.discount)}</p>
               <p>Service: ${(bill.serviceCharge || 0).toFixed(2)}</p>
             </div>
 

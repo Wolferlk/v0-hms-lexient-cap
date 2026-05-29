@@ -4,6 +4,22 @@ import { Supplier } from '@/lib/models/Inventory';
 import { sampleSuppliers } from '@/lib/sampleData';
 import { ObjectId } from 'mongodb';
 
+function normalizeSupplierInput(body: any) {
+  return {
+    name: body.name,
+    contactPerson: body.contactPerson,
+    email: body.email,
+    phone: body.phone,
+    address: body.address,
+    city: body.city?.trim() || 'N/A',
+    state: body.state?.trim() || 'N/A',
+    zipCode: body.zipCode?.trim() || 'N/A',
+    paymentTerms: body.paymentTerms?.trim() || 'COD',
+    taxId: body.taxId,
+    rating: body.rating || 5,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -70,17 +86,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supplier = new Supplier({
-      name: body.name,
-      contactPerson: body.contactPerson,
-      email: body.email,
-      phone: body.phone,
-      address: body.address,
-      city: body.city || '',
-      state: body.state || '',
-      zipCode: body.zipCode || '',
-      paymentTerms: body.paymentTerms || 'COD',
-      taxId: body.taxId,
-      rating: body.rating || 5,
+      ...normalizeSupplierInput(body),
       isActive: true,
     });
 
@@ -108,7 +114,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Valid supplier ID required' }, { status: 400 });
     }
 
-    const supplier = await Supplier.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+    const supplier = await Supplier.findByIdAndUpdate(id, normalizeSupplierInput(update), { new: true, runValidators: true });
     if (!supplier) return NextResponse.json({ success: false, error: 'Supplier not found' }, { status: 404 });
 
     return NextResponse.json({ success: true, data: supplier });

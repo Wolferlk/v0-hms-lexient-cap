@@ -84,6 +84,7 @@ const DEPARTMENTS = [
   { value: 'maintenance', label: 'Maintenance' },
   { value: 'security', label: 'Security' },
   { value: 'management', label: 'Management' },
+  { value: 'boat_rides', label: 'Boat Rides' },
   { value: 'spa', label: 'Spa & Wellness' },
   { value: 'accounts', label: 'Accounts' },
 ];

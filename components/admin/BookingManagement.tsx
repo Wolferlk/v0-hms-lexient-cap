@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { format, differenceInDays, differenceInHours } from 'date-fns';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
   Eye, CheckCircle, XCircle, UtensilsCrossed, FileText, LogOut,
   LogIn, Plus, Trash2, CreditCard, IdCard, Search, RefreshCw,
@@ -507,6 +508,8 @@ export default function BookingManagement() {
   const selectedRoomInfo = rooms.find(r => r._id === nb.roomId);
   const nbTotal = selectedRoomInfo ? selectedRoomInfo.pricePerNight * nbNights : 0;
 
+  const { dual: fxDual, toLKR, loading: fxLoading } = useCurrency();
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -651,7 +654,10 @@ export default function BookingManagement() {
                       <span><Phone className="inline h-3 w-3 mr-0.5" />{b.customerPhone}</span>
                       <span><Calendar className="inline h-3 w-3 mr-0.5" />{format(new Date(b.checkInDate),'MMM dd')} → {format(new Date(b.checkOutDate),'MMM dd')}</span>
                       <span><BedDouble className="inline h-3 w-3 mr-0.5" />{b.roomIds?.length || 0} room · {b.numberOfNights}n</span>
-                      <span className="font-medium text-foreground"><DollarSign className="inline h-3 w-3" />{(b.totalAmount - (b.discountAmount||0)).toFixed(0)}</span>
+                      <span className="font-medium text-foreground">
+                        ${(b.totalAmount - (b.discountAmount||0)).toFixed(0)}
+                        {!fxLoading && <span className="text-muted-foreground"> / {toLKR(b.totalAmount - (b.discountAmount||0))}</span>}
+                      </span>
                       {(b.amountPaid || 0) > 0 && <span className="text-green-600">Paid: ${b.amountPaid.toFixed(0)}</span>}
                     </div>
                   </div>
@@ -720,9 +726,9 @@ export default function BookingManagement() {
             {selectedRoomInfo && nbNights > 0 && (
               <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm space-y-1">
                 <p className="font-semibold text-blue-800">Booking Summary</p>
-                <div className="flex justify-between"><span>Room {selectedRoomInfo.roomNumber} ({selectedRoomInfo.category})</span><span>${selectedRoomInfo.pricePerNight}/night</span></div>
+                <div className="flex justify-between"><span>Room {selectedRoomInfo.roomNumber} ({selectedRoomInfo.category})</span><span>${selectedRoomInfo.pricePerNight} / {toLKR(selectedRoomInfo.pricePerNight)} per night</span></div>
                 <div className="flex justify-between"><span>Nights</span><span>× {nbNights}</span></div>
-                <div className="flex justify-between font-bold text-blue-900 border-t border-blue-200 pt-1"><span>Estimated Total</span><span>${nbTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between font-bold text-blue-900 border-t border-blue-200 pt-1"><span>Estimated Total</span><span>{fxDual(nbTotal)}</span></div>
               </div>
             )}
 
@@ -843,10 +849,10 @@ export default function BookingManagement() {
 
                   {/* Payment summary — room charges only; see Invoice tab for full grand total */}
                   <div className="rounded-lg border p-3 space-y-1 text-sm">
-                    <div className="flex justify-between"><span>Room Total</span><span>${selectedBooking.totalAmount.toFixed(2)}</span></div>
-                    {(selectedBooking.discountAmount||0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-${selectedBooking.discountAmount.toFixed(2)}</span></div>}
-                    {(selectedBooking.amountPaid||0) > 0 && <div className="flex justify-between text-blue-600"><span>Amount Paid</span><span>${selectedBooking.amountPaid.toFixed(2)}</span></div>}
-                    <div className="flex justify-between font-bold border-t pt-1"><span>Room Balance</span><span>${(selectedBooking.totalAmount-(selectedBooking.discountAmount||0)-(selectedBooking.amountPaid||0)).toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Room Total</span><span>{fxDual(selectedBooking.totalAmount)}</span></div>
+                    {(selectedBooking.discountAmount||0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{fxDual(selectedBooking.discountAmount)}</span></div>}
+                    {(selectedBooking.amountPaid||0) > 0 && <div className="flex justify-between text-blue-600"><span>Amount Paid</span><span>{fxDual(selectedBooking.amountPaid)}</span></div>}
+                    <div className="flex justify-between font-bold border-t pt-1"><span>Room Balance</span><span>{fxDual(selectedBooking.totalAmount-(selectedBooking.discountAmount||0)-(selectedBooking.amountPaid||0))}</span></div>
                   </div>
 
                   {/* Payment history */}
@@ -1137,12 +1143,12 @@ export default function BookingManagement() {
 
                       {/* Grand summary */}
                       <div className="rounded-xl border-2 border-primary p-3 space-y-1.5 text-sm">
-                        <div className="flex justify-between"><span>Room Total</span><span>${invoice.summary.roomTotal.toFixed(2)}</span></div>
-                        {invoice.summary.foodTotal > 0 && <div className="flex justify-between"><span>Food & Beverages</span><span>${invoice.summary.foodTotal.toFixed(2)}</span></div>}
-                        {invoice.summary.additionalTotal > 0 && <div className="flex justify-between"><span>Additional Charges</span><span>${invoice.summary.additionalTotal.toFixed(2)}</span></div>}
-                        <div className="flex justify-between font-bold text-base border-t pt-1.5"><span>Grand Total</span><span>${invoice.summary.grandTotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-green-600"><span>Amount Paid</span><span>-${invoice.summary.amountPaid.toFixed(2)}</span></div>
-                        <div className="flex justify-between font-bold text-red-600 text-base"><span>Balance Due</span><span>${invoice.summary.balanceDue.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>Room Total</span><span>{fxDual(invoice.summary.roomTotal)}</span></div>
+                        {invoice.summary.foodTotal > 0 && <div className="flex justify-between"><span>Food & Beverages</span><span>{fxDual(invoice.summary.foodTotal)}</span></div>}
+                        {invoice.summary.additionalTotal > 0 && <div className="flex justify-between"><span>Additional Charges</span><span>{fxDual(invoice.summary.additionalTotal)}</span></div>}
+                        <div className="flex justify-between font-bold text-base border-t pt-1.5"><span>Grand Total</span><span>{fxDual(invoice.summary.grandTotal)}</span></div>
+                        <div className="flex justify-between text-green-600"><span>Amount Paid</span><span>-{fxDual(invoice.summary.amountPaid)}</span></div>
+                        <div className="flex justify-between font-bold text-red-600 text-base"><span>Balance Due</span><span>{fxDual(invoice.summary.balanceDue)}</span></div>
                       </div>
 
                       {/* Payment history */}
@@ -1175,10 +1181,10 @@ export default function BookingManagement() {
                   {invoice && (
                     <div className="rounded-xl bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 p-4 space-y-1.5 text-sm">
                       <p className="font-bold text-base text-red-800">Final Settlement</p>
-                      <div className="flex justify-between"><span>Grand Total</span><span className="font-semibold">${invoice.summary.grandTotal.toFixed(2)}</span></div>
-                      <div className="flex justify-between text-green-700"><span>Paid So Far</span><span>${invoice.summary.amountPaid.toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>Grand Total</span><span className="font-semibold">{fxDual(invoice.summary.grandTotal)}</span></div>
+                      <div className="flex justify-between text-green-700"><span>Paid So Far</span><span>{fxDual(invoice.summary.amountPaid)}</span></div>
                       <div className="flex justify-between font-bold text-red-700 border-t border-red-200 pt-1.5 text-base">
-                        <span>Balance Due</span><span>${invoice.summary.balanceDue.toFixed(2)}</span>
+                        <span>Balance Due</span><span>{fxDual(invoice.summary.balanceDue)}</span>
                       </div>
                     </div>
                   )}

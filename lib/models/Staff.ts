@@ -6,7 +6,7 @@ const EmployeeSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   department: {
     type: String,
-    enum: ['housekeeping', 'restaurant', 'front_desk', 'maintenance', 'security', 'management'],
+    enum: ['housekeeping', 'restaurant', 'front_desk', 'maintenance', 'security', 'management', 'boat_rides', 'spa', 'accounts'],
     required: true,
   },
   position: { type: String, required: true },

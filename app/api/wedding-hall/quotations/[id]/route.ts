@@ -1,9 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { WeddingQuotation, WeddingMenuPackage, WeddingSupplierPackage } from '@/lib/models/WeddingHall';
+import '@/lib/models/Inventory';
 import { ObjectId } from 'mongodb';
 
 type Params = { params: Promise<{ id: string }> };
+
+function populateQuotationRelations(query: any) {
+  query
+    .populate('hallId', 'name capacity basePrice hallType features area amenities')
+    .populate('menuPackageId', 'name pricePerHead items description');
+
+  if (WeddingQuotation.schema.path('supplierId')) {
+    query.populate('supplierId', 'name contactPerson email phone');
+  }
+
+  if (WeddingQuotation.schema.path('supplierPackageId')) {
+    query.populate('supplierPackageId', 'packageType packageName price description supplierId');
+  }
+
+  return query;
+}
+
+function recalculateQuotationTotals(quotation: any) {
+  quotation.additionalAmount = quotation.additionalItems.reduce((sum: number, item: any) => sum + item.total, 0);
+  quotation.totalAmount =
+    (quotation.baseAmount || 0) +
+    (quotation.menuAmount || 0) +
+    (quotation.supplierPackageAmount || 0) +
+    (quotation.addOnsAmount || 0) +
+    (quotation.additionalAmount || 0);
+}
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
@@ -12,11 +39,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (!ObjectId.isValid(id))
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-    const q = await WeddingQuotation.findById(id)
-      .populate('hallId', 'name capacity basePrice area amenities')
-      .populate('menuPackageId', 'name pricePerHead items description')
-      .populate('supplierId', 'name contactPerson email phone')
-      .populate('supplierPackageId', 'packageType packageName price description supplierId');
+    const q = await populateQuotationRelations(WeddingQuotation.findById(id));
 
     if (!q) return NextResponse.json({ success: false, error: 'Quotation not found' }, { status: 404 });
 
@@ -98,9 +121,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         });
       }
 
-      quotation.additionalAmount = quotation.additionalItems.reduce((s: number, i: any) => s + i.total, 0);
-      quotation.totalAmount =
-        quotation.baseAmount + quotation.menuAmount + quotation.addOnsAmount + quotation.additionalAmount;
+      recalculateQuotationTotals(quotation);
       await quotation.save();
       return NextResponse.json({ success: true, data: quotation });
     }
@@ -121,9 +142,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         total: (unitPrice !== undefined ? unitPrice : quotation.additionalItems[itemIndex].unitPrice) * (quantity || quotation.additionalItems[itemIndex].quantity),
       };
 
-      quotation.additionalAmount = quotation.additionalItems.reduce((s: number, i: any) => s + i.total, 0);
-      quotation.totalAmount =
-        quotation.baseAmount + quotation.menuAmount + quotation.addOnsAmount + quotation.additionalAmount;
+      recalculateQuotationTotals(quotation);
       await quotation.save();
       return NextResponse.json({ success: true, data: quotation });
     }
@@ -138,9 +157,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         return NextResponse.json({ success: false, error: 'Invalid item index' }, { status: 400 });
 
       quotation.additionalItems.splice(itemIndex, 1);
-      quotation.additionalAmount = quotation.additionalItems.reduce((s: number, i: any) => s + i.total, 0);
-      quotation.totalAmount =
-        quotation.baseAmount + quotation.menuAmount + quotation.addOnsAmount + quotation.additionalAmount;
+      recalculateQuotationTotals(quotation);
       await quotation.save();
       return NextResponse.json({ success: true, data: quotation });
     }
@@ -205,13 +222,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       supplierPackageAmount = supplierPkg?.price || 0;
     }
 
-    const updated = await WeddingQuotation.findByIdAndUpdate(
+    const updated = await populateQuotationRelations(WeddingQuotation.findByIdAndUpdate(
       id,
       { ...body, menuAmount, supplierPackageAmount, totalAmount: quotation.baseAmount + menuAmount + supplierPackageAmount + quotation.addOnsAmount + quotation.additionalAmount },
       { new: true, runValidators: true }
-    )
-      .populate('hallId', 'name capacity basePrice hallType features')
-      .populate('menuPackageId', 'name pricePerHead items description');
+    ));
 
     return NextResponse.json({ success: true, data: updated });
   } catch (e: any) {

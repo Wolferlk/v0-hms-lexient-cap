@@ -2,10 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { WeddingHall } from '@/lib/models/WeddingHall';
 import { sampleWeddingHalls } from '@/lib/sampleData';
+import { ObjectId } from 'mongodb';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+
+    const existingHallCount = await WeddingHall.countDocuments({});
+    if (existingHallCount === 0) {
+      await WeddingHall.insertMany(
+        sampleWeddingHalls.map((hall) => ({
+          ...hall,
+          hallType: 'standard',
+          features: {
+            airConditioned: true,
+            parking: true,
+            kitchenAccess: true,
+            danceFloor: true,
+            stage: true,
+            soundSystem: true,
+          },
+        })),
+        { ordered: false }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const minCapacity = parseInt(searchParams.get('minCapacity') || '0');
@@ -28,21 +48,15 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     const total = await WeddingHall.countDocuments(query);
-    const fallbackHalls = sampleWeddingHalls.filter((hall) => {
-      if (hall.capacity < minCapacity) return false;
-      if (hall.basePrice > maxPrice) return false;
-      if (availability && hall.availability !== availability) return false;
-      return true;
-    });
 
     return NextResponse.json({
       success: true,
-      data: halls.length ? halls : fallbackHalls,
+      data: halls,
       pagination: {
-        total: halls.length ? total : fallbackHalls.length,
+        total,
         page,
         limit,
-        pages: Math.ceil((halls.length ? total : fallbackHalls.length) / limit),
+        pages: Math.ceil(total / limit),
       },
     });
   } catch (error: any) {
@@ -93,6 +107,72 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('[v0] Wedding halls POST error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    await connectDB();
+    const body = await request.json();
+    const { id, ...update } = body;
+
+    if (!id || !ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, error: 'Valid hall ID required' },
+        { status: 400 }
+      );
+    }
+
+    const hall = await WeddingHall.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!hall) {
+      return NextResponse.json(
+        { success: false, error: 'Wedding hall not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data: hall });
+  } catch (error: any) {
+    console.error('[v0] Wedding halls PUT error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id || !ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, error: 'Valid hall ID required' },
+        { status: 400 }
+      );
+    }
+
+    const hall = await WeddingHall.findByIdAndDelete(id);
+    if (!hall) {
+      return NextResponse.json(
+        { success: false, error: 'Wedding hall not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: 'Wedding hall deleted' });
+  } catch (error: any) {
+    console.error('[v0] Wedding halls DELETE error:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

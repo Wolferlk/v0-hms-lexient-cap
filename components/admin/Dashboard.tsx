@@ -18,7 +18,11 @@ import {
   BedDouble,
   TableIcon,
   RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  ArrowRightLeft,
 } from 'lucide-react';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface Props {
   onNavigate?: (tab: string) => void;
@@ -84,6 +88,7 @@ interface Stats {
 }
 
 export default function Dashboard({ onNavigate }: Props) {
+  const { rates, loading: fxLoading, lastUpdated: fxUpdated } = useCurrency();
   const [stats, setStats] = useState<Stats | null>(null);
   const [upcomingBookings, setUpcomingBookings] = useState<BookingRow[]>([]);
   const [activeRooms, setActiveRooms] = useState<BookingRow[]>([]);
@@ -205,6 +210,47 @@ export default function Dashboard({ onNavigate }: Props) {
           </Card>
         ))}
       </div>
+
+      {/* ── Live Exchange Rate Banner ─────────────────────────────── */}
+      <Card className="overflow-hidden border-0 bg-gradient-to-r from-slate-800 to-slate-900 text-white">
+        <CardContent className="px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft className="h-4 w-4 text-blue-300" />
+              <span className="text-sm font-semibold text-slate-200">Live Exchange Rates</span>
+              {fxUpdated && (
+                <span className="text-xs text-slate-400">· {format(fxUpdated, 'HH:mm')}</span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-5">
+              {fxLoading ? (
+                <span className="text-xs text-slate-400 animate-pulse">Loading rates…</span>
+              ) : (
+                (['LKR', 'GBP', 'AED', 'AUD'] as const).map(cur => {
+                  const rate = cur === 'LKR' ? (rates['LKR'] ?? 0) : (rates['LKR'] ?? 0) / (rates[cur] ?? 1);
+                  const sym = cur === 'LKR' ? 'Rs.' : cur === 'GBP' ? '£' : cur === 'AED' ? 'AED' : 'A$';
+                  const flag = cur === 'LKR' ? '🇱🇰' : cur === 'GBP' ? '🇬🇧' : cur === 'AED' ? '🇦🇪' : '🇦🇺';
+                  if (!rate) return null;
+                  return (
+                    <div key={cur} className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-400">{flag} 1 USD =</span>
+                      <span className="font-bold text-white text-sm">
+                        {cur === 'LKR' ? `Rs.${Math.round(rate).toLocaleString()}` : `${sym}${(1 / (rates[cur] ?? 1)).toFixed(4)}`}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <button
+              onClick={() => onNavigate?.('currency')}
+              className="text-xs text-blue-300 hover:text-blue-100 transition-colors underline underline-offset-2"
+            >
+              Full Exchange Center →
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* ── Upcoming Room Bookings ───────────────────────────── */}

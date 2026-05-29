@@ -148,34 +148,40 @@ const MENU_PACKAGE_DEFAULTS = [
   {
     packageNumber: 1,
     name: 'Classic Package',
-    pricePerHead: 25,
+    pricePerHead: 2500,
     items: ['Rice & Curry', 'Vegetable Curry', 'Chicken Korma', 'Bread', 'Dessert'],
   },
   {
     packageNumber: 2,
     name: 'Deluxe Package',
-    pricePerHead: 45,
+    pricePerHead: 4500,
     items: ['Biryani', 'Fish Curry', 'Chicken Tikka', 'Paneer Dish', 'Bread', 'Dessert', 'Beverages'],
   },
   {
     packageNumber: 3,
     name: 'Premium Package',
-    pricePerHead: 65,
+    pricePerHead: 6500,
     items: ['Seafood Biryani', 'Tandoori Chicken', 'Fish Fry', 'Mutton Curry', 'Paneer Tikka Masala', 'Bread Basket', 'Dessert', 'Beverages', 'Coffee/Tea'],
   },
   {
     packageNumber: 4,
     name: 'Royal Package',
-    pricePerHead: 85,
+    pricePerHead: 8500,
     items: ['King Prawns Biryani', 'Tandoori Fish', 'Mutton Roast', 'Butter Chicken', 'Paneer Do Pyaza', 'Multiple Breads', 'Dessert Bar', 'Premium Beverages', 'Appetizers'],
   },
   {
     packageNumber: 5,
     name: 'Elite Package',
-    pricePerHead: 120,
+    pricePerHead: 12000,
     items: ['Luxury Biryani Selection', 'Lobster Preparation', 'Prime Cuts', 'Chef Special Curry', 'Paneer Extravaganza', 'Artisan Breads', 'Gourmet Desserts', 'Wine & Beverages', 'Live Appetizer Station'],
   },
 ];
+
+const formatLKR = (amount?: number | null) =>
+  `LKR ${Number(amount || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 // ── Print Helpers ────────────────────────────────────────────────────────────
 
@@ -253,19 +259,19 @@ function printBillWithQR(q: Quotation, hotel = 'Lexient Hotel') {
         </tr>
         <tr class="row">
           <td class="label">Hall Base Charge</td>
-          <td class="amount">$${q.baseAmount.toFixed(2)}</td>
+          <td class="amount">${formatLKR(q.baseAmount)}</td>
         </tr>
         ${q.menuPackageId ? `<tr class="row">
           <td class="label">Menu (${q.menuPackageId.name})</td>
-          <td class="amount">$${q.menuAmount.toFixed(2)}</td>
+          <td class="amount">${formatLKR(q.menuAmount)}</td>
         </tr>` : ''}
         ${q.addOns.map(a => `<tr class="row">
           <td class="label">${a.description || a.type}</td>
-          <td class="amount">$${a.price.toFixed(2)}</td>
+          <td class="amount">${formatLKR(a.price)}</td>
         </tr>`).join('')}
         ${q.additionalItems.map(i => `<tr class="row">
           <td class="label">${i.name} (×${i.quantity})</td>
-          <td class="amount">$${i.total.toFixed(2)}</td>
+          <td class="amount">${formatLKR(i.total)}</td>
         </tr>`).join('')}
       </table>
     </div>
@@ -276,15 +282,15 @@ function printBillWithQR(q: Quotation, hotel = 'Lexient Hotel') {
       <table>
         <tr class="row total">
           <td class="label">TOTAL AMOUNT</td>
-          <td class="amount highlight">$${q.totalAmount.toFixed(2)}</td>
+          <td class="amount highlight">${formatLKR(q.totalAmount)}</td>
         </tr>
         <tr class="row">
           <td class="label">Amount Paid</td>
-          <td class="amount">$${q.advancePaid.toFixed(2)}</td>
+          <td class="amount">${formatLKR(q.advancePaid)}</td>
         </tr>
         <tr class="row total">
           <td class="label">BALANCE DUE</td>
-          <td class="amount highlight">$${remainingAmount.toFixed(2)}</td>
+          <td class="amount highlight">${formatLKR(remainingAmount)}</td>
         </tr>
       </table>
     </div>
@@ -353,6 +359,7 @@ export default function WeddingHallManagementAdvanced() {
   // Edit items
   const [editItemsMode, setEditItemsMode] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [editItemDraft, setEditItemDraft] = useState({ name: '', quantity: 1, unitPrice: 0 });
 
   // Payment dialog
   const [paymentDialog, setPaymentDialog] = useState(false);
@@ -364,7 +371,7 @@ export default function WeddingHallManagementAdvanced() {
   // Menu package edit
   const [editPkgDialog, setEditPkgDialog] = useState(false);
   const [editingPkg, setEditingPkg] = useState<MenuPackage | null>(null);
-  const [pkgForm, setPkgForm] = useState({ name: '', description: '', pricePerHead: 0, items: [''] });
+  const [pkgForm, setPkgForm] = useState({ packageNumber: 1, name: '', description: '', pricePerHead: 0, items: [''] });
   const [supplierDialog, setSupplierDialog] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [supplierForm, setSupplierForm] = useState({
@@ -555,6 +562,11 @@ export default function WeddingHallManagementAdvanced() {
     } else { toast.error(data.error); }
   };
 
+  const startEditItem = (item: AdditionalItem, itemIndex: number) => {
+    setEditingItemIndex(itemIndex);
+    setEditItemDraft({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice });
+  };
+
   const handleDeleteItem = async (itemIndex: number) => {
     if (!selectedQ) return;
     const res = await fetch(`/api/wedding-hall/quotations/${selectedQ._id}`, {
@@ -573,13 +585,21 @@ export default function WeddingHallManagementAdvanced() {
   // ── Menu package edit ────────────────────────────────────────────────────
 
   const savePkg = async () => {
-    if (!editingPkg) return;
+    const method = editingPkg ? 'PUT' : 'POST';
+    const body = editingPkg ? { id: editingPkg._id, ...pkgForm } : pkgForm;
     const res = await fetch('/api/wedding-hall/menu-packages', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: editingPkg._id, ...pkgForm, items: pkgForm.items.filter(i => i.trim()) }),
+      method, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, items: pkgForm.items.filter(i => i.trim()) }),
     });
     const data = await res.json();
-    if (data.success) { toast.success('Menu package updated'); setEditPkgDialog(false); fetchAll(); }
+    if (data.success) { toast.success(editingPkg ? 'Menu package updated' : 'Menu package created'); setEditPkgDialog(false); setEditingPkg(null); fetchAll(); }
+    else { toast.error(data.error); }
+  };
+
+  const deletePkg = async (id: string) => {
+    const res = await fetch(`/api/wedding-hall/menu-packages?id=${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { toast.success('Menu package deleted'); fetchAll(); }
     else { toast.error(data.error); }
   };
 
@@ -750,9 +770,9 @@ export default function WeddingHallManagementAdvanced() {
                         )}
                       </div>
                       <div className="text-right text-sm">
-                        <p className="font-bold">${q.totalAmount.toFixed(2)}</p>
-                        <p className="text-xs text-green-600">Paid: ${q.advancePaid.toFixed(2)}</p>
-                        {balance > 0 && <p className="text-xs text-red-500">Due: ${balance.toFixed(2)}</p>}
+                        <p className="font-bold">{formatLKR(q.totalAmount)}</p>
+                        <p className="text-xs text-green-600">Paid: {formatLKR(q.advancePaid)}</p>
+                        {balance > 0 && <p className="text-xs text-red-500">Due: {formatLKR(balance)}</p>}
                       </div>
                     </div>
                     
@@ -840,7 +860,7 @@ export default function WeddingHallManagementAdvanced() {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div><p className="text-xs text-muted-foreground">Capacity</p><p className="font-medium">{hall.capacity} pax</p></div>
                     <div><p className="text-xs text-muted-foreground">Area</p><p className="font-medium">{hall.area} sq.ft</p></div>
-                    <div className="col-span-2"><p className="text-xs text-muted-foreground">Base Price</p><p className="font-bold text-lg">${hall.basePrice}</p></div>
+                    <div className="col-span-2"><p className="text-xs text-muted-foreground">Base Price</p><p className="font-bold text-lg">{formatLKR(hall.basePrice)}</p></div>
                   </div>
 
                   {hall.features && (
@@ -876,9 +896,19 @@ export default function WeddingHallManagementAdvanced() {
 
         {/* ══ MENU PACKAGES (5 TYPES) ══════════════════════════════════════ */}
         <TabsContent value="menus" className="space-y-4">
-          <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded p-3">
-            📋 <strong>5 Preset Menu Packages</strong> — Customize each package to define what's included and set the price per head.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground bg-blue-50 border border-blue-200 rounded p-3">
+              📋 <strong>Menu Packages</strong> — Customize presets or add new package options for quotations.
+            </p>
+            <Button size="sm" onClick={() => {
+              const nextNumber = Math.max(0, ...menuPackages.map(pkg => pkg.packageNumber)) + 1;
+              setEditingPkg(null);
+              setPkgForm({ packageNumber: nextNumber, name: '', description: '', pricePerHead: 0, items: [''] });
+              setEditPkgDialog(true);
+            }}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />Add Menu Package
+            </Button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {menuPackages.map(pkg => (
               <div key={pkg._id} className="rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
@@ -887,17 +917,22 @@ export default function WeddingHallManagementAdvanced() {
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-700 text-sm font-bold mr-2">{pkg.packageNumber}</span>
                     <span className="font-semibold">{pkg.name}</span>
                   </div>
-                  <span className="text-lg font-bold text-rose-600">${pkg.pricePerHead}<span className="text-xs font-normal text-muted-foreground">/head</span></span>
+                  <span className="text-lg font-bold text-rose-600">{formatLKR(pkg.pricePerHead)}<span className="text-xs font-normal text-muted-foreground">/head</span></span>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2">{pkg.description}</p>
                 <div className="space-y-0.5 text-xs">
                   {pkg.items.slice(0, 6).map((item, i) => <div key={i} className="text-muted-foreground">• {item}</div>)}
                   {pkg.items.length > 6 && <div className="text-muted-foreground font-medium">+{pkg.items.length - 6} more items</div>}
                 </div>
-                <Button variant="outline" size="sm" className="h-7 text-xs w-full"
-                  onClick={() => { setEditingPkg(pkg); setPkgForm({ name: pkg.name, description: pkg.description, pricePerHead: pkg.pricePerHead, items: [...pkg.items, ''] }); setEditPkgDialog(true); }}>
-                  <Edit className="h-3 w-3 mr-1" />Customize Package
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-xs flex-1"
+                    onClick={() => { setEditingPkg(pkg); setPkgForm({ packageNumber: pkg.packageNumber, name: pkg.name, description: pkg.description, pricePerHead: pkg.pricePerHead, items: [...pkg.items, ''] }); setEditPkgDialog(true); }}>
+                    <Edit className="h-3 w-3 mr-1" />Customize
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600" onClick={() => deletePkg(pkg._id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -994,7 +1029,7 @@ export default function WeddingHallManagementAdvanced() {
                         <div>
                           <p className="font-medium">{pkg.packageName}</p>
                           <p className="text-xs text-muted-foreground">{pkg.packageType.replace('_', ' ')} · {supplier?.name || 'Unknown supplier'}</p>
-                          <p className="text-xs text-muted-foreground">${pkg.price.toFixed(2)} · {pkg.description}</p>
+                          <p className="text-xs text-muted-foreground">{formatLKR(pkg.price)} · {pkg.description}</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
                           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
@@ -1053,7 +1088,7 @@ export default function WeddingHallManagementAdvanced() {
                     <SelectTrigger><SelectValue placeholder="Choose a wedding hall..." /></SelectTrigger>
                     <SelectContent>
                       {halls.map(h => <SelectItem key={h._id} value={h._id}>
-                        {h.name} — {h.hallType} · {h.capacity} pax · ${h.basePrice}
+                        {h.name} — {h.hallType} · {h.capacity} pax · {formatLKR(h.basePrice)}
                       </SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1099,10 +1134,10 @@ export default function WeddingHallManagementAdvanced() {
                         className={`rounded-lg border-2 p-3 text-left text-sm transition-all ${form.menuPackageId === pkg._id ? 'border-rose-500 bg-rose-50' : 'border-border hover:border-rose-300'}`}>
                         <div className="flex items-center justify-between">
                           <span className="font-semibold">Package {pkg.packageNumber}: {pkg.name}</span>
-                          <span className="font-bold text-rose-600">${pkg.pricePerHead}/head</span>
+                          <span className="font-bold text-rose-600">{formatLKR(pkg.pricePerHead)}/head</span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">{pkg.items.slice(0, 3).join(', ')}...</p>
-                        <p className="text-xs mt-2 font-medium text-foreground">Total for {form.pax} pax: ${(pkg.pricePerHead * form.pax).toFixed(0)}</p>
+                        <p className="text-xs mt-2 font-medium text-foreground">Total for {form.pax} pax: {formatLKR(pkg.pricePerHead * form.pax)}</p>
                       </button>
                     ))}
                   </div>
@@ -1134,7 +1169,7 @@ export default function WeddingHallManagementAdvanced() {
                     {form.addOns.map((ao, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="text-sm flex-1 capitalize">{ao.type.replace('_', ' ')}</span>
-                        <Input className="w-24 h-8 text-sm" type="number" placeholder="Price" value={ao.price || ''} onChange={e => {
+                        <Input className="w-24 h-8 text-sm" type="number" placeholder="LKR" value={ao.price || ''} onChange={e => {
                           const updated = [...form.addOns]; updated[i].price = parseFloat(e.target.value) || 0; setForm(f => ({ ...f, addOns: updated }));
                         }} />
                         <Button variant="ghost" size="sm" className="h-8 text-red-500" onClick={() => setForm(f => ({ ...f, addOns: f.addOns.filter((_, j) => j !== i) }))}>
@@ -1180,7 +1215,7 @@ export default function WeddingHallManagementAdvanced() {
                             {supplierPackages
                               .filter(pkg => !form.supplierId || pkg.supplierId === form.supplierId)
                               .map(pkg => (
-                                <SelectItem key={pkg._id} value={pkg._id}>{pkg.packageName} · ${pkg.price}</SelectItem>
+                                <SelectItem key={pkg._id} value={pkg._id}>{pkg.packageName} · {formatLKR(pkg.price)}</SelectItem>
                               ))}
                           </SelectContent>
                         </Select>
@@ -1205,11 +1240,11 @@ export default function WeddingHallManagementAdvanced() {
               <div className="space-y-4">
                 <p className="text-sm font-semibold">📊 Quotation Summary</p>
                 <div className="rounded-lg bg-muted/40 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Hall Base Charge</span><span>${totals.base.toFixed(2)}</span></div>
-                  {totals.menu > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Menu ({form.pax} pax)</span><span>${totals.menu.toFixed(2)}</span></div>}
-                    {totals.supplierPackageAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Supplier Package</span><span>${totals.supplierPackageAmount.toFixed(2)}</span></div>}
-                  {totals.addOnsTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Add-ons & Services</span><span>${totals.addOnsTotal.toFixed(2)}</span></div>}
-                  <div className="flex justify-between font-bold text-base border-t pt-2"><span>GRAND TOTAL</span><span>${totals.grand.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Hall Base Charge</span><span>{formatLKR(totals.base)}</span></div>
+                  {totals.menu > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Menu ({form.pax} pax)</span><span>{formatLKR(totals.menu)}</span></div>}
+                    {totals.supplierPackageAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Supplier Package</span><span>{formatLKR(totals.supplierPackageAmount)}</span></div>}
+                  {totals.addOnsTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Add-ons & Services</span><span>{formatLKR(totals.addOnsTotal)}</span></div>}
+                  <div className="flex justify-between font-bold text-base border-t pt-2"><span>GRAND TOTAL</span><span>{formatLKR(totals.grand)}</span></div>
                   <p className="text-xs text-muted-foreground mt-2 p-2 bg-blue-50 rounded border border-blue-200">
                     ⏰ <strong>Valid for 3 months</strong> from today. After 3 months, quotation expires. Can be reactivated with advance payment.
                   </p>
@@ -1239,13 +1274,13 @@ export default function WeddingHallManagementAdvanced() {
           {selectedQ && (
             <div className="space-y-4 pt-2">
               <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1">
-                <div className="flex justify-between"><span>Total Amount</span><span className="font-bold">${selectedQ.totalAmount.toFixed(2)}</span></div>
-                <div className="flex justify-between text-green-600"><span>Already Paid</span><span>${selectedQ.advancePaid.toFixed(2)}</span></div>
-                <div className="flex justify-between text-red-500 font-medium"><span>Balance Due</span><span>${(selectedQ.totalAmount - selectedQ.advancePaid).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span>Total Amount</span><span className="font-bold">{formatLKR(selectedQ.totalAmount)}</span></div>
+                <div className="flex justify-between text-green-600"><span>Already Paid</span><span>{formatLKR(selectedQ.advancePaid)}</span></div>
+                <div className="flex justify-between text-red-500 font-medium"><span>Balance Due</span><span>{formatLKR(selectedQ.totalAmount - selectedQ.advancePaid)}</span></div>
               </div>
               
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Amount to Pay *</Label><Input type="number" min={0} step={0.01} value={payAmount} onChange={e => setPayAmount(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Amount to Pay (LKR) *</Label><Input type="number" min={0} step={0.01} value={payAmount} onChange={e => setPayAmount(e.target.value)} /></div>
                 <div className="space-y-2"><Label>Payment Method</Label>
                   <Select value={payMethod} onValueChange={setPayMethod}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1288,10 +1323,10 @@ export default function WeddingHallManagementAdvanced() {
             <div className="space-y-2"><Label>Item Name *</Label><Input value={newItem.name} onChange={e => setNewItem(i => ({ ...i, name: e.target.value }))} placeholder="e.g. Extra Floral Arrangement, Additional Bar Service" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2"><Label>Quantity</Label><Input type="number" min={1} value={newItem.quantity} onChange={e => setNewItem(i => ({ ...i, quantity: parseInt(e.target.value) || 1 }))} /></div>
-              <div className="space-y-2"><Label>Unit Price ($)</Label><Input type="number" min={0} step={0.01} value={newItem.unitPrice} onChange={e => setNewItem(i => ({ ...i, unitPrice: parseFloat(e.target.value) || 0 }))} /></div>
+              <div className="space-y-2"><Label>Unit Price (LKR)</Label><Input type="number" min={0} step={0.01} value={newItem.unitPrice} onChange={e => setNewItem(i => ({ ...i, unitPrice: parseFloat(e.target.value) || 0 }))} /></div>
             </div>
             {newItem.name && newItem.unitPrice > 0 && (
-              <p className="text-sm font-medium text-muted-foreground">Total: ${(newItem.quantity * newItem.unitPrice).toFixed(2)}</p>
+              <p className="text-sm font-medium text-muted-foreground">Total: {formatLKR(newItem.quantity * newItem.unitPrice)}</p>
             )}
             <Button className="w-full" onClick={handleAddItem} disabled={!newItem.name.trim() || newItem.unitPrice <= 0}>➕ Add Item to Bill</Button>
           </div>
@@ -1301,11 +1336,14 @@ export default function WeddingHallManagementAdvanced() {
       {/* ══ EDIT MENU PACKAGE DIALOG ────────────────────────────────────── */}
       <Dialog open={editPkgDialog} onOpenChange={setEditPkgDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Customize Menu Package — {editingPkg?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingPkg ? `Customize Menu Package - ${editingPkg.name}` : 'Add Menu Package'}</DialogTitle></DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-2"><Label>Package Name</Label><Input value={pkgForm.name} onChange={e => setPkgForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2"><Label>No.</Label><Input type="number" min={1} value={pkgForm.packageNumber} onChange={e => setPkgForm(f => ({ ...f, packageNumber: parseInt(e.target.value) || 1 }))} /></div>
+              <div className="col-span-2 space-y-2"><Label>Package Name</Label><Input value={pkgForm.name} onChange={e => setPkgForm(f => ({ ...f, name: e.target.value }))} /></div>
+            </div>
             <div className="space-y-2"><Label>Description</Label><Input value={pkgForm.description} onChange={e => setPkgForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of what's included" /></div>
-            <div className="space-y-2"><Label>Price Per Head ($)</Label><Input type="number" min={0} step={0.01} value={pkgForm.pricePerHead} onChange={e => setPkgForm(f => ({ ...f, pricePerHead: parseFloat(e.target.value) || 0 }))} /></div>
+            <div className="space-y-2"><Label>Price Per Head (LKR)</Label><Input type="number" min={0} step={0.01} value={pkgForm.pricePerHead} onChange={e => setPkgForm(f => ({ ...f, pricePerHead: parseFloat(e.target.value) || 0 }))} /></div>
             <div className="space-y-2">
               <Label>Menu Items (one per line)</Label>
               {pkgForm.items.map((item, i) => (
@@ -1322,7 +1360,7 @@ export default function WeddingHallManagementAdvanced() {
                 <Plus className="h-3.5 w-3.5 mr-1" />Add Menu Item
               </Button>
             </div>
-            <Button className="w-full" onClick={savePkg}>💾 Save Package</Button>
+            <Button className="w-full" onClick={savePkg} disabled={!pkgForm.name.trim() || pkgForm.pricePerHead < 0}>💾 Save Package</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1392,7 +1430,7 @@ export default function WeddingHallManagementAdvanced() {
               </Select>
             </div>
             <div className="space-y-2"><Label>Package Name *</Label><Input value={supplierPackageForm.packageName} onChange={e => setSupplierPackageForm(f => ({ ...f, packageName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Price ($)</Label><Input type="number" min={0} value={supplierPackageForm.price} onChange={e => setSupplierPackageForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} /></div>
+            <div className="space-y-2"><Label>Price (LKR)</Label><Input type="number" min={0} value={supplierPackageForm.price} onChange={e => setSupplierPackageForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} /></div>
             <div className="space-y-2"><Label>Description</Label><Input value={supplierPackageForm.description} onChange={e => setSupplierPackageForm(f => ({ ...f, description: e.target.value }))} /></div>
             <Button className="w-full" onClick={saveSupplierPackage} disabled={!supplierPackageForm.supplierId || !supplierPackageForm.packageName.trim() || supplierPackageForm.price < 0}>💾 Save Package</Button>
           </div>
@@ -1418,7 +1456,7 @@ export default function WeddingHallManagementAdvanced() {
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-2"><Label>Capacity</Label><Input type="number" min={1} value={hallForm.capacity} onChange={e => setHallForm(f => ({ ...f, capacity: parseInt(e.target.value) || 1 }))} /></div>
               <div className="space-y-2"><Label>Area (sq.ft)</Label><Input type="number" min={1} value={hallForm.area} onChange={e => setHallForm(f => ({ ...f, area: parseInt(e.target.value) || 1 }))} /></div>
-              <div className="space-y-2"><Label>Base Price ($)</Label><Input type="number" min={0} value={hallForm.basePrice} onChange={e => setHallForm(f => ({ ...f, basePrice: parseInt(e.target.value) || 0 }))} /></div>
+              <div className="space-y-2"><Label>Base Price (LKR)</Label><Input type="number" min={0} value={hallForm.basePrice} onChange={e => setHallForm(f => ({ ...f, basePrice: parseInt(e.target.value) || 0 }))} /></div>
             </div>
 
             <div className="space-y-2"><Label>Availability</Label>
@@ -1509,14 +1547,14 @@ export default function WeddingHallManagementAdvanced() {
               {selectedQ.menuPackageId && (
                 <div className="rounded-lg bg-rose-50 border border-rose-200 p-3">
                   <p className="font-semibold text-rose-700">🍽️ Menu: {selectedQ.menuPackageId.name}</p>
-                  <p className="text-xs text-rose-600 mt-1">${selectedQ.menuPackageId.pricePerHead}/head · Total: ${selectedQ.menuAmount?.toFixed(2)}</p>
+                  <p className="text-xs text-rose-600 mt-1">{formatLKR(selectedQ.menuPackageId.pricePerHead)}/head · Total: {formatLKR(selectedQ.menuAmount)}</p>
                 </div>
               )}
 
               {selectedQ.supplierPackageId && (
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                   <p className="font-semibold text-blue-700">🤝 Supplier Package: {selectedQ.supplierPackageId.packageName}</p>
-                  <p className="text-xs text-blue-600 mt-1">{selectedQ.supplierId?.name || 'Supplier'} · ${selectedQ.supplierPackageId.price.toFixed(2)}</p>
+                  <p className="text-xs text-blue-600 mt-1">{selectedQ.supplierId?.name || 'Supplier'} · {formatLKR(selectedQ.supplierPackageId.price)}</p>
                   {selectedQ.supplierPackageId.description && <p className="text-xs text-muted-foreground mt-1">{selectedQ.supplierPackageId.description}</p>}
                 </div>
               )}
@@ -1528,7 +1566,7 @@ export default function WeddingHallManagementAdvanced() {
                     {selectedQ.addOns.map((a, i) => (
                       <div key={i} className="flex justify-between text-xs border-b py-1 last:border-b-0">
                         <span className="capitalize">{a.type.replace('_', ' ')}</span>
-                        <span className="font-medium">${a.price.toFixed(2)}</span>
+                        <span className="font-medium">{formatLKR(a.price)}</span>
                       </div>
                     ))}
                   </div>
@@ -1541,7 +1579,10 @@ export default function WeddingHallManagementAdvanced() {
                   <div className="flex justify-between items-center mb-2">
                     <p className="font-semibold">📝 Additional Items</p>
                     {selectedQ.status === 'active' && (
-                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setEditItemsMode(!editItemsMode)}>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
+                        setEditItemsMode(!editItemsMode);
+                        setEditingItemIndex(null);
+                      }}>
                         {editItemsMode ? 'Done' : '✏️ Edit'}
                       </Button>
                     )}
@@ -1551,17 +1592,29 @@ export default function WeddingHallManagementAdvanced() {
                       <div key={idx} className={`border rounded p-2 ${editingItemIndex === idx ? 'bg-blue-50' : 'bg-muted/30'}`}>
                         {editItemsMode && editingItemIndex === idx ? (
                           <div className="space-y-2">
-                            <Input value={i.name} className="h-7 text-xs" onChange={e => { }} placeholder="Item name" />
+                            <Input value={editItemDraft.name} className="h-7 text-xs" onChange={e => setEditItemDraft(d => ({ ...d, name: e.target.value }))} placeholder="Item name" />
                             <div className="grid grid-cols-3 gap-2">
-                              <Input type="number" value={i.quantity} className="h-7 text-xs" onChange={e => { }} placeholder="Qty" />
-                              <Input type="number" value={i.unitPrice} className="h-7 text-xs" onChange={e => { }} placeholder="Price" />
+                              <Input type="number" min={1} value={editItemDraft.quantity} className="h-7 text-xs" onChange={e => setEditItemDraft(d => ({ ...d, quantity: parseInt(e.target.value) || 1 }))} placeholder="Qty" />
+                              <Input type="number" min={0} value={editItemDraft.unitPrice} className="h-7 text-xs" onChange={e => setEditItemDraft(d => ({ ...d, unitPrice: parseFloat(e.target.value) || 0 }))} placeholder="LKR" />
                               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleDeleteItem(idx)}>Delete</Button>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" className="h-7 flex-1 text-xs" onClick={() => handleEditItem(idx, editItemDraft.name, editItemDraft.quantity, editItemDraft.unitPrice)} disabled={!editItemDraft.name.trim() || editItemDraft.unitPrice < 0}>Save</Button>
+                              <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => setEditingItemIndex(null)}>Cancel</Button>
                             </div>
                           </div>
                         ) : (
-                          <div className="flex justify-between text-xs">
-                            <span className="font-medium">{i.name} ×{i.quantity}</span>
-                            <span>${i.total.toFixed(2)}</span>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <div>
+                              <span className="font-medium">{i.name} ×{i.quantity}</span>
+                              <p className="text-muted-foreground">{formatLKR(i.unitPrice)} each</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span>{formatLKR(i.total)}</span>
+                              {editItemsMode && (
+                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => startEditItem(i, idx)}>Edit</Button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1572,13 +1625,13 @@ export default function WeddingHallManagementAdvanced() {
 
               {/* Billing Summary */}
               <div className="rounded-lg bg-muted/40 p-3 space-y-1 text-xs">
-                <div className="flex justify-between"><span className="text-muted-foreground">Hall Base</span><span>${selectedQ.baseAmount?.toFixed(2)}</span></div>
-                {selectedQ.menuAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Menu</span><span>${selectedQ.menuAmount?.toFixed(2)}</span></div>}
-                {selectedQ.addOnsAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Add-ons</span><span>${selectedQ.addOnsAmount?.toFixed(2)}</span></div>}
-                {selectedQ.additionalAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Additional Items</span><span>${selectedQ.additionalAmount?.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold border-t pt-1"><span>TOTAL</span><span>${selectedQ.totalAmount.toFixed(2)}</span></div>
-                <div className="flex justify-between text-green-600"><span>Paid</span><span>-${selectedQ.advancePaid.toFixed(2)}</span></div>
-                <div className="flex justify-between font-bold text-red-600"><span>DUE</span><span>${(selectedQ.totalAmount - selectedQ.advancePaid).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Hall Base</span><span>{formatLKR(selectedQ.baseAmount)}</span></div>
+                {selectedQ.menuAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Menu</span><span>{formatLKR(selectedQ.menuAmount)}</span></div>}
+                {selectedQ.addOnsAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Add-ons</span><span>{formatLKR(selectedQ.addOnsAmount)}</span></div>}
+                {selectedQ.additionalAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Additional Items</span><span>{formatLKR(selectedQ.additionalAmount)}</span></div>}
+                <div className="flex justify-between font-bold border-t pt-1"><span>TOTAL</span><span>{formatLKR(selectedQ.totalAmount)}</span></div>
+                <div className="flex justify-between text-green-600"><span>Paid</span><span>-{formatLKR(selectedQ.advancePaid)}</span></div>
+                <div className="flex justify-between font-bold text-red-600"><span>DUE</span><span>{formatLKR(selectedQ.totalAmount - selectedQ.advancePaid)}</span></div>
               </div>
 
               {/* Payment History */}
@@ -1588,7 +1641,7 @@ export default function WeddingHallManagementAdvanced() {
                   <div className="space-y-1">
                     {selectedQ.payments.map((p, i) => (
                       <div key={i} className="flex justify-between text-xs rounded bg-muted/30 px-2 py-1">
-                        <span className="capitalize">{p.method} - ${p.amount}</span>
+                        <span className="capitalize">{p.method} - {formatLKR(p.amount)}</span>
                         <span className="text-muted-foreground">{format(new Date(p.date), 'MMM dd')}</span>
                       </div>
                     ))}

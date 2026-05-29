@@ -13,10 +13,12 @@ import DayOutManagement from '@/components/admin/DayOutManagement';
 import StaffManagement from '@/components/admin/StaffManagement';
 import AnalyticsReporting from '@/components/admin/AnalyticsReporting';
 import Dashboard from '@/components/admin/Dashboard';
+import CurrencyExchange from '@/components/admin/CurrencyExchange';
+import BoatRideManagement from '@/components/admin/BoatRideManagement';
 import {
   BarChart3, Home, Calendar, Users, Zap, Package,
   DollarSign, Heart, UtensilsCrossed, Anchor, LineChart,
-  Menu, X,
+  Menu, X, ArrowRightLeft, Waves,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -26,10 +28,12 @@ const NAV_ITEMS = [
   { id: 'restaurant', label: 'Restaurant',    icon: UtensilsCrossed },
   { id: 'wedding',    label: 'Wedding',       icon: Heart },
   { id: 'dayout',     label: 'Day-out',       icon: Anchor },
+  { id: 'boatride',   label: 'Boat Rides',    icon: Waves },
   { id: 'staff',      label: 'Staff',         icon: Users },
   { id: 'inventory',  label: 'Inventory',     icon: Package },
   { id: 'finance',    label: 'Finance',       icon: DollarSign },
   { id: 'analytics',  label: 'Analytics',     icon: LineChart },
+  { id: 'currency',   label: 'Currency',      icon: ArrowRightLeft },
   { id: 'bookingcom', label: 'Booking.com',   icon: Zap },
 ];
 
@@ -118,11 +122,13 @@ export default function AdminPage() {
             {activeTab === 'bookings'   && <BookingManagement />}
             {activeTab === 'restaurant' && <RestaurantManagement />}
             {activeTab === 'dayout'     && <DayOutManagement />}
+            {activeTab === 'boatride'   && <BoatRideManagement />}
             {activeTab === 'staff'      && <StaffManagement />}
             {activeTab === 'inventory'  && <InventoryManagement />}
             {activeTab === 'finance'    && <FinancialManagement />}
             {activeTab === 'wedding'    && <WeddingHallManagementAdvanced />}
             {activeTab === 'analytics'  && <AnalyticsReporting />}
+            {activeTab === 'currency'   && <CurrencyExchange />}
             {activeTab === 'bookingcom' && <BookingComIntegration />}
           </div>
         </main>

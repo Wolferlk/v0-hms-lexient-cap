@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
   Plus, Trash2, Edit, Search, RefreshCw, Printer, QrCode,
   DollarSign, CheckCircle, XCircle, Eye, Anchor, Package,
@@ -114,6 +115,7 @@ const badge = (s: string) => ({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DayOutManagement() {
+  const { toUSD } = useCurrency();
   const [activeTab, setActiveTab] = useState('groupBookings');
   const [loading, setLoading] = useState(true);
 
@@ -414,9 +416,9 @@ export default function DayOutManagement() {
             </div>
           </div>
           <div className="text-right text-sm">
-            <p className="font-bold">Rs.{(b.totalAmount ?? 0).toLocaleString()}</p>
+            <p className="font-bold">Rs.{(b.totalAmount ?? 0).toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ {toUSD(b.totalAmount ?? 0)}</span></p>
             <p className="text-xs text-green-600">Paid: Rs.{(b.advancePaid ?? 0).toLocaleString()}</p>
-            {(b.balanceAmount ?? 0) > 0 && <p className="text-xs text-red-500">Due: Rs.{(b.balanceAmount ?? 0).toLocaleString()}</p>}
+            {(b.balanceAmount ?? 0) > 0 && <p className="text-xs text-red-500">Due: Rs.{(b.balanceAmount ?? 0).toLocaleString()} / {toUSD(b.balanceAmount ?? 0)}</p>}
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5 pt-1">
@@ -568,7 +570,7 @@ export default function DayOutManagement() {
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div><p className="text-xs text-muted-foreground">Rs./Person</p><p className="font-medium">Rs.{pkg.pricePerPerson}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Rs./Person</p><p className="font-medium">Rs.{pkg.pricePerPerson} / {toUSD(pkg.pricePerPerson)}</p></div>
                   <div><p className="text-xs text-muted-foreground">Max Group</p><p className="font-medium">{pkg.maxGroupSize} pax</p></div>
                   <div><p className="text-xs text-muted-foreground">Duration</p><p className="font-medium">{pkg.duration}h</p></div>
                 </div>
@@ -617,7 +619,7 @@ export default function DayOutManagement() {
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div><p className="text-xs text-muted-foreground">Rs./Person</p><p className="font-medium">Rs.{pkg.pricePerPerson}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Rs./Person</p><p className="font-medium">Rs.{pkg.pricePerPerson} / {toUSD(pkg.pricePerPerson)}</p></div>
                   <div><p className="text-xs text-muted-foreground">Capacity</p><p className="font-medium">{pkg.capacity} pax</p></div>
                   <div><p className="text-xs text-muted-foreground">Duration</p><p className="font-medium">{pkg.duration}min</p></div>
                 </div>
@@ -661,7 +663,7 @@ export default function DayOutManagement() {
               const total = pkg.pricePerPerson * groupForm.numberOfPeople * (1 - (pkg.discountPercentage || 0) / 100);
               return (
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
-                  <p className="font-semibold text-blue-700">Estimated Total: Rs.{Math.round(total).toLocaleString()}</p>
+                  <p className="font-semibold text-blue-700">Estimated Total: Rs.{Math.round(total).toLocaleString()} / {toUSD(Math.round(total))}</p>
                   {pkg.discountPercentage ? <p className="text-xs text-blue-600">{pkg.discountPercentage}% group discount applied</p> : null}
                 </div>
               );
