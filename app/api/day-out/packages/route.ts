@@ -1,14 +1,15 @@
 import { connectDB } from '@/lib/mongodb';
 import { DayOutPackage } from '@/lib/models/DayOut';
+import { ensureDayOutPackagesSeeded } from '@/lib/dayOutSeed';
 import { NextRequest, NextResponse } from 'next/server';
-import { sampleDayOutPackages } from '@/lib/sampleData';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    await ensureDayOutPackagesSeeded();
 
     const packages = await DayOutPackage.find().sort({ createdAt: -1 });
-    return NextResponse.json({ success: true, data: packages.length ? packages : sampleDayOutPackages });
+    return NextResponse.json({ success: true, data: packages });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },
@@ -37,7 +38,10 @@ export async function POST(request: NextRequest) {
       amenities,
     } = body;
 
-    if (!name || !price || !capacity || !duration || !maxGroupSize || !pricePerPerson) {
+    const normalizedPricePerPerson = Number(pricePerPerson) || 0;
+    const normalizedPrice = Number(price) || normalizedPricePerPerson;
+
+    if (!name || !capacity || !duration || !maxGroupSize || !normalizedPricePerPerson) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -47,16 +51,16 @@ export async function POST(request: NextRequest) {
     const dayOutPackage = new DayOutPackage({
       name,
       description,
-      price,
-      capacity,
-      duration,
-      activities,
-      inclusions,
-      minGroupSize,
-      maxGroupSize,
-      pricePerPerson,
-      discountPercentage,
-      amenities,
+      price: normalizedPrice,
+      capacity: Number(capacity),
+      duration: Number(duration),
+      activities: Array.isArray(activities) ? activities : [],
+      inclusions: Array.isArray(inclusions) ? inclusions : [],
+      minGroupSize: Number(minGroupSize) || 1,
+      maxGroupSize: Number(maxGroupSize),
+      pricePerPerson: normalizedPricePerPerson,
+      discountPercentage: Number(discountPercentage) || 0,
+      amenities: Array.isArray(amenities) ? amenities : [],
     });
 
     await dayOutPackage.save();
@@ -83,7 +87,24 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const updated = await DayOutPackage.findByIdAndUpdate(id, updateData, { new: true });
+    const normalizedUpdate = {
+      ...updateData,
+      price: Number(updateData.price) || Number(updateData.pricePerPerson) || 0,
+      capacity: Number(updateData.capacity) || 1,
+      duration: Number(updateData.duration) || 1,
+      minGroupSize: Number(updateData.minGroupSize) || 1,
+      maxGroupSize: Number(updateData.maxGroupSize) || 1,
+      pricePerPerson: Number(updateData.pricePerPerson) || 0,
+      discountPercentage: Number(updateData.discountPercentage) || 0,
+      activities: Array.isArray(updateData.activities) ? updateData.activities : [],
+      inclusions: Array.isArray(updateData.inclusions) ? updateData.inclusions : [],
+      amenities: Array.isArray(updateData.amenities) ? updateData.amenities : [],
+    };
+
+    const updated = await DayOutPackage.findByIdAndUpdate(id, normalizedUpdate, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!updated) {
       return NextResponse.json(

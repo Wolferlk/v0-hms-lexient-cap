@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ObjectId } from 'mongodb';
 import { connectDB } from '@/lib/mongodb';
 import { Booking } from '@/lib/models/Booking';
 import { Room } from '@/lib/models/Room';
@@ -175,17 +176,22 @@ export async function POST(request: NextRequest) {
 
     await newBooking.save();
 
-    // Update customer booking count and total spent
-    await Customer.findByIdAndUpdate(
-      customerId,
-      {
-        $inc: {
-          totalBookings: 1,
-          totalSpent: finalAmount,
-        },
-      },
-      { upsert: true }
-    );
+    // Update customer booking count and total spent only for real customer records.
+    if (ObjectId.isValid(customerId)) {
+      const customer = await Customer.findById(customerId);
+      if (customer) {
+        await Customer.findByIdAndUpdate(
+          customerId,
+          {
+            $inc: {
+              totalBookings: 1,
+              totalSpent: finalAmount,
+            },
+          },
+          { upsert: false }
+        );
+      }
+    }
 
     return NextResponse.json(
       {

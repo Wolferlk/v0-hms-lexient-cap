@@ -1,16 +1,12 @@
 import { connectDB } from '@/lib/mongodb';
 import { GroupBooking, DayOutPackage } from '@/lib/models/DayOut';
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  sampleCustomers,
-  sampleDayOutPackages,
-  sampleGroupBookings,
-  withPopulatedRelations,
-} from '@/lib/sampleData';
+import { ensureDayOutGroupBookingsSeeded, ensureDayOutPackagesSeeded } from '@/lib/dayOutSeed';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    await ensureDayOutGroupBookingsSeeded();
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -23,15 +19,7 @@ export async function GET(request: NextRequest) {
       .populate('customerId', 'name email phone')
       .sort({ bookingDate: -1 });
 
-    const fallbackBookings = withPopulatedRelations(sampleGroupBookings, {
-      packageId: sampleDayOutPackages,
-      customerId: sampleCustomers,
-    }).filter((booking) => {
-      if (query.status && booking.status !== query.status) return false;
-      return true;
-    });
-
-    return NextResponse.json({ success: true, data: bookings.length ? bookings : fallbackBookings });
+    return NextResponse.json({ success: true, data: bookings });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },
@@ -43,6 +31,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    await ensureDayOutPackagesSeeded();
 
     const body = await request.json();
     const {
@@ -57,9 +46,26 @@ export async function POST(request: NextRequest) {
       paymentMethod,
     } = body;
 
-    if (!packageId || !groupName || !bookingDate || !numberOfPeople) {
+    const normalizedNumberOfPeople = Number(numberOfPeople);
+    const normalizedAdvanceAmount = Number(advanceAmount) || 0;
+    const parsedBookingDate = new Date(bookingDate);
+
+    if (
+      !packageId ||
+      !groupName ||
+      !bookingDate ||
+      !Number.isFinite(normalizedNumberOfPeople) ||
+      normalizedNumberOfPeople < 1
+    ) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    if (Number.isNaN(parsedBookingDate.getTime())) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid booking date' },
         { status: 400 }
       );
     }
@@ -73,7 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (numberOfPeople > dayOutPackage.maxGroupSize) {
+    if (normalizedNumberOfPeople > dayOutPackage.maxGroupSize) {
       return NextResponse.json(
         { success: false, error: 'Group size exceeds package capacity' },
         { status: 400 }
@@ -81,31 +87,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate pricing
-    let totalPrice = numberOfPeople * dayOutPackage.pricePerPerson;
+    let totalPrice = normalizedNumberOfPeople * dayOutPackage.pricePerPerson;
     if (dayOutPackage.discountPercentage) {
       totalPrice = totalPrice * (1 - dayOutPackage.discountPercentage / 100);
     }
 
     const depositAmount = Math.round(totalPrice * 0.3); // 30% deposit
     const balanceAmount = totalPrice - depositAmount;
+    const paymentStatus = normalizedAdvanceAmount >= totalPrice
+      ? 'paid'
+      : normalizedAdvanceAmount > 0
+        ? 'partial'
+        : 'pending';
+    const status = normalizedAdvanceAmount >= depositAmount ? 'confirmed' : 'pending';
 
     const booking = new GroupBooking({
       packageId,
-      customerId,
+      customerId: customerId || undefined,
       groupName,
-      bookingDate: new Date(bookingDate),
-      numberOfPeople,
+      bookingDate: parsedBookingDate,
+      numberOfPeople: normalizedNumberOfPeople,
       totalPrice,
       totalAmount: totalPrice,
       depositAmount,
       balanceAmount,
-      advancePaid: advanceAmount > 0 ? advanceAmount : 0,
-      payments: advanceAmount > 0 ? [{ amount: advanceAmount, method: paymentMethod || 'cash', date: new Date(), notes: 'Advance payment' }] : [],
+      advancePaid: normalizedAdvanceAmount,
+      payments: normalizedAdvanceAmount > 0
+        ? [{ amount: normalizedAdvanceAmount, method: paymentMethod || 'cash', date: new Date(), notes: 'Advance payment' }]
+        : [],
       additionalItems: [],
-      contactPerson,
+      contactPerson: contactPerson || undefined,
       specialRequests,
-      paymentStatus: advanceAmount > 0 ? 'partial' : 'pending',
-      status: advanceAmount > 0 ? 'confirmed' : 'pending',
+      paymentStatus,
+      status,
     });
 
     await booking.save();
@@ -151,6 +165,7 @@ export async function PUT(request: NextRequest) {
       }
       if (booking.advancePaid >= booking.totalAmount) {
         booking.paymentStatus = 'paid';
+        booking.status = 'completed';
       } else if (booking.advancePaid > 0) {
         booking.paymentStatus = 'partial';
       }
@@ -216,20 +231,21 @@ export async function PUT(request: NextRequest) {
     }
 
     if (action === 'close') {
-      if (booking.status !== 'confirmed') {
-        return NextResponse.json({ success: false, error: 'Only confirmed bookings can be closed' }, { status: 400 });
+      if (booking.status === 'cancelled' || booking.status === 'completed') {
+        return NextResponse.json({ success: false, error: `Cannot close a ${booking.status} booking` }, { status: 400 });
       }
       const due = Math.max(0, booking.totalAmount - booking.advancePaid);
-      if (due > 0 && (!amount || amount < due)) {
+      const settlementAmount = Number.isFinite(Number(amount)) && Number(amount) > 0 ? Number(amount) : due;
+      if (due > 0 && settlementAmount < due) {
         return NextResponse.json({ success: false, error: 'Closing requires full settlement of the remaining balance' }, { status: 400 });
       }
-      if (amount && amount > 0) {
-        booking.payments.push({ amount, method: method || 'cash', date: new Date(), notes: notes || '' });
-        booking.advancePaid = (booking.advancePaid || 0) + amount;
+      if (settlementAmount > 0) {
+        booking.payments.push({ amount: settlementAmount, method: method || 'cash', date: new Date(), notes: notes || '' });
+        booking.advancePaid = (booking.advancePaid || 0) + settlementAmount;
       }
       booking.balanceAmount = Math.max(0, booking.totalAmount - booking.advancePaid);
-      booking.paymentStatus = booking.balanceAmount === 0 ? 'paid' : booking.paymentStatus;
-      booking.status = 'completed';
+      booking.paymentStatus = booking.balanceAmount === 0 ? 'paid' : booking.advancePaid > 0 ? 'partial' : 'pending';
+      booking.status = booking.balanceAmount === 0 ? 'completed' : (booking.advancePaid >= booking.depositAmount ? 'confirmed' : 'pending');
       booking.updatedAt = new Date();
       await booking.save();
       await booking.populate('packageId').populate('customerId');

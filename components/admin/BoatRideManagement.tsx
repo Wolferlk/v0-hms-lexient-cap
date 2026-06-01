@@ -49,7 +49,7 @@ interface BoatRider {
   _id: string; riderId: string; name: string; phone: string; email?: string;
   riderType: 'company' | 'contract'; licenseNumber?: string;
   monthlySalaryLKR?: number; contractPricePerRideLKR?: number;
-  assignedBoatId?: string; status: string; profileNote?: string;
+  assignedBoatId?: string; staffEmployeeId?: string; status: string; profileNote?: string;
 }
 
 interface Booking {
@@ -1167,6 +1167,122 @@ function RidersTab({ riders, boats, onReload }: { riders: BoatRider[]; boats: Bo
     toast.success('Rider removed'); onReload();
   };
 
+  const markAttendance = async (r: BoatRider) => {
+    if (!r.staffEmployeeId) {
+      toast.error('This rider is not linked to Staff yet');
+      return;
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const month = todayStr.slice(0, 7);
+    const payload = {
+      employeeId: r.staffEmployeeId,
+      attendanceDate: todayStr,
+      status: 'present',
+      checkInTime: today.toISOString(),
+      remarks: 'Marked from Boat Ride Management',
+    };
+
+    try {
+      const existingRes = await fetch(`/api/staff/attendance?employeeId=${r.staffEmployeeId}&month=${month}`);
+      const existingData = await existingRes.json();
+      const existingToday = Array.isArray(existingData.data)
+        ? existingData.data.find((record: any) => {
+            const recordDate = record.attendanceDate ? new Date(record.attendanceDate).toISOString().slice(0, 10) : '';
+            return recordDate === todayStr;
+          })
+        : null;
+
+      const res = existingToday
+        ? await fetch('/api/staff/attendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: existingToday._id,
+              status: 'present',
+              checkInTime: today.toISOString(),
+              checkOutTime: existingToday.checkOutTime ?? undefined,
+              remarks: 'Marked from Boat Ride Management',
+            }),
+          })
+        : await fetch('/api/staff/attendance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.error || 'Failed to mark attendance');
+        return;
+      }
+      toast.success(`${r.name} marked present`);
+    } catch {
+      toast.error('Failed to mark attendance');
+    }
+  };
+
+  const payRider = async (r: BoatRider) => {
+    if (!r.staffEmployeeId) {
+      toast.error('This rider is not linked to Staff yet');
+      return;
+    }
+
+    const month = new Date().toISOString().slice(0, 7);
+    const salary = r.riderType === 'company'
+      ? Number(r.monthlySalaryLKR) || 0
+      : Number(r.contractPricePerRideLKR) || 0;
+
+    try {
+      const existingRes = await fetch(`/api/staff/payroll?employeeId=${r.staffEmployeeId}&month=${month}`);
+      const existingData = await existingRes.json();
+      const existing = Array.isArray(existingData.data)
+        ? existingData.data.find((record: any) => record.month === month)
+        : null;
+
+      let payrollId = existing?._id;
+      if (!existing) {
+        const createRes = await fetch('/api/staff/payroll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeId: r.staffEmployeeId,
+            month,
+            allowances: 0,
+            deductions: 0,
+          }),
+        });
+        const createData = await createRes.json();
+        if (!createData.success) {
+          toast.error(createData.error || 'Failed to create payroll');
+          return;
+        }
+        payrollId = createData.data?._id;
+      }
+
+      const payRes = await fetch('/api/staff/payroll', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: payrollId,
+          status: 'paid',
+          paymentDate: new Date().toISOString(),
+          paymentMethod: 'cash',
+          remarks: `Boat ride staff payment for ${month} (${r.riderType} rider, Rs.${salary.toLocaleString()})`,
+        }),
+      });
+      const payData = await payRes.json();
+      if (!payData.success) {
+        toast.error(payData.error || 'Failed to mark payment');
+        return;
+      }
+      toast.success(`${r.name} marked paid`);
+    } catch {
+      toast.error('Failed to mark payment');
+    }
+  };
+
   const company = riders.filter(r => r.riderType === 'company');
   const contract = riders.filter(r => r.riderType === 'contract');
 
@@ -1218,6 +1334,14 @@ function RidersTab({ riders, boats, onReload }: { riders: BoatRider[]; boats: Bo
           </p>
         )}
         {r.profileNote && <p className="text-xs text-muted-foreground italic">{r.profileNote}</p>}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => markAttendance(r)}>
+            <UserCheck className="h-3.5 w-3.5 mr-1" />Mark Attendance
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => payRider(r)}>
+            <DollarSign className="h-3.5 w-3.5 mr-1" />Pay
+          </Button>
+        </div>
       </div>
     );
   };

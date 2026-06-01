@@ -6,34 +6,39 @@ import { ObjectId } from 'mongodb';
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
-  await connectDB();
-  const { id } = await params;
-  if (!ObjectId.isValid(id)) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+  try {
+    await connectDB();
+    const { id } = await params;
+    if (!ObjectId.isValid(id)) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-  const body = await req.json();
-  const { type, description, costLKR, performedBy, nextDueDateNote } = body;
+    const body = await req.json();
+    const { type, description, costLKR, performedBy, nextDueDateNote } = body;
 
-  if (!type || !description) {
-    return NextResponse.json({ success: false, error: 'type and description required' }, { status: 400 });
-  }
+    if (!type || !description) {
+      return NextResponse.json({ success: false, error: 'type and description required' }, { status: 400 });
+    }
 
-  const boat = await Boat.findByIdAndUpdate(
-    id,
-    {
-      $push: {
-        serviceRecords: {
-          date: new Date(),
-          type,
-          description,
-          costLKR: Number(costLKR) || 0,
-          performedBy: performedBy || '',
-          nextDueDateNote: nextDueDateNote || '',
+    const boat = await Boat.findByIdAndUpdate(
+      id,
+      {
+        $push: {
+          serviceRecords: {
+            date: new Date(),
+            type,
+            description,
+            costLKR: Number(costLKR) || 0,
+            performedBy: performedBy || '',
+            nextDueDateNote: nextDueDateNote || '',
+          },
         },
       },
-    },
-    { new: true }
-  );
+      { new: true }
+    );
 
-  if (!boat) return NextResponse.json({ success: false, error: 'Boat not found' }, { status: 404 });
-  return NextResponse.json({ success: true, data: boat }, { status: 201 });
+    if (!boat) return NextResponse.json({ success: false, error: 'Boat not found' }, { status: 404 });
+    return NextResponse.json({ success: true, data: boat }, { status: 201 });
+  } catch (err) {
+    console.error('[boat-ride/boats/[id]/service POST]', err);
+    return NextResponse.json({ success: false, error: 'Failed to add service record' }, { status: 500 });
+  }
 }
